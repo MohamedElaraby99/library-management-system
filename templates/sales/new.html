@@ -1,0 +1,905 @@
+{% extends "base.html" %}
+
+{% block title %}بيع جديد - نظام إدارة المكتبة{% endblock %}
+
+{% block content %}
+<script>
+    var csrf_token = "{{ csrf_token() }}";
+</script>
+<style>
+    #customerDropdown {
+        position: absolute !important;
+        top: 100% !important;
+        left: 0 !important;
+        z-index: 1050;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        border: 1px solid #dee2e6;
+    }
+
+    #customerDropdown .dropdown-item {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f8f9fa;
+    }
+
+    #customerDropdown .dropdown-item:hover,
+    #customerDropdown .dropdown-item.active {
+        background-color: #e3f2fd;
+        color: #0d47a1;
+    }
+
+    #customerDropdown .dropdown-item:last-child {
+        border-bottom: none;
+    }
+
+    #customerSearch:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+
+    .customer-debt-badge {
+        font-size: 0.75rem;
+    }
+</style>
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">الرئيسية</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('sales') }}">المبيعات</a></li>
+                    <li class="breadcrumb-item active">بيع جديد</li>
+                </ol>
+            </nav>
+
+            <h1 class="h3 mb-3">
+                <i class="bi bi-cart-plus"></i>
+                بيع جديد
+            </h1>
+            <p class="text-muted">إضافة عملية بيع جديدة مع خصم تلقائي من المخزون</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Product Selection -->
+        <div class="col-lg-8 mb-4">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-search"></i>
+                        اختيار المنتجات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <input type="text" id="productSearch" class="form-control" placeholder="ابحث عن منتج..."
+                                onkeyup="searchProducts()">
+                        </div>
+                        <div class="col-md-4">
+                            <button type="button" class="btn btn-outline-secondary w-100" onclick="loadProducts()">
+                                <i class="bi bi-arrow-clockwise"></i> تحديث القائمة
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="productsList" class="row">
+                        <div class="col-12 text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">جاري التحميل...</span>
+                            </div>
+                            <p class="mt-2 text-muted">جاري تحميل المنتجات...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cart and Totals -->
+        <div class="col-lg-4">
+            <div class="card sticky-top" style="top: 100px;">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-cart"></i>
+                        سلة المبيعات
+                        <span id="cartCount" class="badge bg-warning text-dark ms-2">0</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="cartItems">
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-cart-x" style="font-size: 3rem;"></i>
+                            <p class="mt-2 mb-0">السلة فارغة</p>
+                            <small>ابدأ بإضافة المنتجات</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="cartFooter" class="card-footer bg-white" style="display: none;">
+                    <!-- نوع الدفع -->
+                    <div class="mb-3">
+                        <label class="form-label">نوع الدفع</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="paymentType" id="cashPayment" value="cash"
+                                checked onchange="togglePaymentType()">
+                            <label class="btn btn-outline-success" for="cashPayment">
+                                <i class="bi bi-cash"></i> نقدي
+                            </label>
+
+                            <input type="radio" class="btn-check" name="paymentType" id="creditPayment" value="credit"
+                                onchange="togglePaymentType()">
+                            <label class="btn btn-outline-warning" for="creditPayment">
+                                <i class="bi bi-clock-history"></i> آجل
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- اختيار العميل (ظاهر فقط للبيع الآجل) -->
+                    <div id="customerSelection" class="mb-3" style="display: none;">
+                        <label class="form-label">العميل *</label>
+                        <div class="input-group mb-2">
+                            <div class="dropdown w-100">
+                                <input type="text" id="customerSearch" class="form-control"
+                                    placeholder="ابحث عن عميل..." autocomplete="off" onclick="showCustomerDropdown()"
+                                    oninput="filterCustomers()">
+                                <input type="hidden" id="selectedCustomerId" value="">
+                                <div id="customerDropdown" class="dropdown-menu w-100"
+                                    style="max-height: 300px; overflow-y: auto;">
+                                    <div class="dropdown-item text-center text-muted">
+                                        <em>ابحث لإظهار العملاء...</em>
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="btn btn-outline-primary" type="button" onclick="showAddCustomerForm()">
+                                <i class="bi bi-person-plus"></i>
+                            </button>
+                        </div>
+                        <div class="invalid-feedback" id="customerError" style="display: none;">
+                            يجب اختيار عميل للبيع الآجل
+                        </div>
+                        <!-- حقل المبلغ المدفوع الآن -->
+                        <div class="mb-2" id="paidAmountGroup" style="display: none;">
+                            <label class="form-label">المبلغ المدفوع الآن</label>
+                            <input type="number" min="0" step="0.01" class="form-control" id="paidAmountInput"
+                                placeholder="أدخل المبلغ المدفوع الآن">
+                            <div class="form-text">يمكن تركه فارغاً إذا لم يتم دفع أي مبلغ الآن</div>
+                        </div>
+                    </div>
+
+                    <!-- إضافة عميل سريع -->
+                    <div id="quickAddCustomer" class="mb-3" style="display: none;">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">إضافة عميل جديد</h6>
+                                <div class="row">
+                                    <div class="col-12 mb-2">
+                                        <input type="text" id="newCustomerName" class="form-control form-control-sm"
+                                            placeholder="اسم العميل *" required>
+                                    </div>
+                                    <div class="col-12 mb-2">
+                                        <input type="text" id="newCustomerPhone" class="form-control form-control-sm"
+                                            placeholder="رقم الهاتف">
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="btn-group w-100">
+                                            <button type="button" class="btn btn-success btn-sm"
+                                                onclick="addQuickCustomer()">
+                                                <i class="bi bi-check"></i> إضافة
+                                            </button>
+                                            <button type="button" class="btn btn-secondary btn-sm"
+                                                onclick="hideAddCustomerForm()">
+                                                <i class="bi bi-x"></i> إلغاء
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">ملاحظات (اختياري)</label>
+                        <textarea id="saleNotes" class="form-control" rows="2"
+                            placeholder="أي ملاحظات إضافية..."></textarea>
+                    </div>
+
+                    <div class="sale-total mb-3">
+                        <h4 class="mb-0">
+                            المجموع: <span id="totalAmount">0.00</span> ج.م
+                        </h4>
+                    </div>
+
+                    <div class="d-grid">
+                        <button id="completeSaleBtn" class="btn btn-success btn-lg" onclick="completeSale()">
+                            <i class="bi bi-check-circle"></i>
+                            إتمام البيع
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success Modal -->
+<div class="modal fade" id="successModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-check-circle"></i>
+                    تم البيع بنجاح
+                </h5>
+            </div>
+            <div class="modal-body text-center">
+                <div class="mb-3">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+                </div>
+                <h4>تمت عملية البيع بنجاح!</h4>
+                <p class="text-muted">رقم البيع: <span id="saleNumber"></span></p>
+                <p class="text-muted">المبلغ: <span id="saleAmount"></span></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="startNewSale()">بيع جديد</button>
+                <a href="{{ url_for('sales') }}" class="btn btn-primary">عرض المبيعات</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Product Card Template -->
+<template id="productCardTemplate">
+    <div class="col-md-6 mb-3 product-card">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-title product-name"></h6>
+                <p class="card-text">
+                    <span class="text-primary fw-bold product-price"></span><br>
+                    <small class="product-stock"></small>
+                </p>
+                <div class="d-flex align-items-center">
+                    <input type="number" class="form-control form-control-sm me-2 quantity-input" min="0.01" step="0.01"
+                        value="1" style="width: 80px;">
+                    <button class="btn btn-primary btn-sm add-to-cart" onclick="addToCart(this)">
+                        <i class="bi bi-plus"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- Cart Item Template -->
+<template id="cartItemTemplate">
+    <div class="cart-item border-bottom pb-3 mb-3">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            <div class="flex-grow-1">
+                <h6 class="mb-1 item-name"></h6>
+                <small class="text-muted">
+                    <span class="item-price"></span> ج.م للوحدة
+                </small>
+            </div>
+            <button class="btn btn-sm btn-outline-danger" onclick="removeFromCart(this)" title="حذف المنتج">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+
+        <!-- Quantity Controls -->
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <button class="btn btn-sm btn-outline-secondary me-1" onclick="decreaseQuantity(this)"
+                    title="تقليل الكمية">
+                    <i class="bi bi-dash"></i>
+                </button>
+                <input type="number" class="form-control form-control-sm text-center mx-1 item-quantity-input"
+                    style="width: 60px;" min="0.01" step="0.01" onchange="updateItemQuantity(this)">
+                <button class="btn btn-sm btn-outline-secondary ms-1" onclick="increaseQuantity(this)"
+                    title="زيادة الكمية">
+                    <i class="bi bi-plus"></i>
+                </button>
+            </div>
+            <div class="text-end">
+                <strong class="item-total text-success"></strong>
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let products = [];
+    let cartItems = [];
+    let cartTotal = 0;
+    let allCustomers = []; // متغير لحفظ جميع العملاء
+
+    // Load products and customers on page load
+    document.addEventListener('DOMContentLoaded', function () {
+        loadProducts();
+        loadCustomers();
+    });
+
+    function loadProducts() {
+        console.log('Loading products...');
+        fetch('/api/products')
+            .then(response => {
+                console.log('Response status:', response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Products loaded:', data);
+                // Filter only available products (stock > 0)
+                const availableProducts = data.filter(product => product.stock > 0);
+                products = availableProducts;
+                displayProducts(products);
+            })
+            .catch(error => {
+                console.error('Error loading products:', error);
+                document.getElementById('productsList').innerHTML = `
+                    <div class="col-12 text-center py-4">
+                        <i class="bi bi-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
+                        <p class="text-danger mt-2">خطأ في تحميل المنتجات: ${error.message}</p>
+                        <button class="btn btn-outline-primary" onclick="loadProducts()">إعادة المحاولة</button>
+                    </div>
+                `;
+            });
+    }
+
+    function displayProducts(productsToShow) {
+        const productsList = document.getElementById('productsList');
+        const template = document.getElementById('productCardTemplate');
+
+        productsList.innerHTML = '';
+
+        if (productsToShow.length === 0) {
+            productsList.innerHTML = `
+            <div class="col-12 text-center py-4">
+                <i class="bi bi-search text-muted" style="font-size: 3rem;"></i>
+                <p class="text-muted mt-2">لا توجد منتجات متاحة للبيع</p>
+            </div>
+        `;
+            return;
+        }
+
+        productsToShow.forEach(product => {
+            const clone = template.content.cloneNode(true);
+
+            clone.querySelector('.product-name').textContent = product.name;
+            clone.querySelector('.product-price').textContent = product.price.toFixed(2) + ' ج.م';
+            clone.querySelector('.product-stock').textContent = `المخزون: ${product.stock} ${product.unit_type}`;
+
+            const quantityInput = clone.querySelector('.quantity-input');
+            quantityInput.max = product.stock;
+
+            const addButton = clone.querySelector('.add-to-cart');
+            addButton.dataset.productId = product.id;
+
+            // Disable if out of stock
+            if (product.stock <= 0) {
+                addButton.disabled = true;
+                addButton.innerHTML = '<i class="bi bi-x"></i> نفد';
+                addButton.classList.remove('btn-primary');
+                addButton.classList.add('btn-secondary');
+                quantityInput.disabled = true;
+            }
+
+            productsList.appendChild(clone);
+        });
+    }
+
+    function searchProducts() {
+        const searchTerm = document.getElementById('productSearch').value.toLowerCase();
+        const filtered = products.filter(product =>
+            product.name.toLowerCase().includes(searchTerm)
+        );
+        displayProducts(filtered);
+    }
+
+    function addToCart(button) {
+        const productId = parseInt(button.dataset.productId);
+        const product = products.find(p => p.id === productId);
+        const quantityInput = button.parentElement.querySelector('.quantity-input');
+        const quantity = parseFloat(quantityInput.value);
+
+        if (!product) {
+            alert('المنتج غير موجود');
+            return;
+        }
+
+        if (quantity <= 0) {
+            alert('يجب أن تكون الكمية أكبر من صفر');
+            return;
+        }
+
+        if (quantity > product.stock) {
+            alert('الكمية المطلوبة غير متوفرة في المخزون');
+            return;
+        }
+
+        // Check if product already in cart
+        const existingItem = cartItems.find(item => item.product_id === productId);
+        if (existingItem) {
+            if (existingItem.quantity + quantity > product.stock) {
+                alert('الكمية الإجمالية تتجاوز المخزون المتاح');
+                return;
+            }
+            existingItem.quantity += quantity;
+            existingItem.total_price = existingItem.quantity * existingItem.unit_price;
+        } else {
+            cartItems.push({
+                product_id: productId,
+                name: product.name,
+                quantity: quantity,
+                unit_price: product.price,
+                total_price: quantity * product.price
+            });
+        }
+
+        updateCart();
+        quantityInput.value = 1; // Reset quantity input
+    }
+
+    function removeFromCart(button) {
+        const cartItem = button.closest('.cart-item');
+        const index = Array.from(cartItem.parentElement.children).indexOf(cartItem);
+        cartItems.splice(index, 1);
+        updateCart();
+    }
+
+    function updateCart() {
+        const cartItemsContainer = document.getElementById('cartItems');
+        const cartCount = document.getElementById('cartCount');
+        const totalAmount = document.getElementById('totalAmount');
+        const cartFooter = document.getElementById('cartFooter');
+
+        if (cartItems.length === 0) {
+            cartItemsContainer.innerHTML = `
+            <div class="text-center text-muted py-4">
+                <i class="bi bi-cart-x" style="font-size: 3rem;"></i>
+                <p class="mt-2 mb-0">السلة فارغة</p>
+                <small>ابدأ بإضافة المنتجات</small>
+            </div>
+        `;
+            cartFooter.style.display = 'none';
+            cartCount.textContent = '0';
+            return;
+        }
+
+        const template = document.getElementById('cartItemTemplate');
+        cartItemsContainer.innerHTML = '';
+
+        cartTotal = 0;
+        cartItems.forEach((item, index) => {
+            const clone = template.content.cloneNode(true);
+
+            clone.querySelector('.item-name').textContent = item.name;
+            clone.querySelector('.item-price').textContent = item.unit_price.toFixed(2);
+            clone.querySelector('.item-total').textContent = item.total_price.toFixed(2) + ' ج.م';
+
+            const quantityInput = clone.querySelector('.item-quantity-input');
+            quantityInput.value = item.quantity;
+            quantityInput.dataset.index = index;
+            quantityInput.dataset.productId = item.product_id;
+
+            cartItemsContainer.appendChild(clone);
+            cartTotal += item.total_price;
+        });
+
+        cartCount.textContent = cartItems.length;
+        totalAmount.textContent = cartTotal.toFixed(2);
+        cartFooter.style.display = 'block';
+    }
+
+    function completeSale() {
+        if (cartItems.length === 0) {
+            alert('يجب إضافة منتجات إلى السلة أولاً');
+            return;
+        }
+
+        const paymentType = document.querySelector('input[name="paymentType"]:checked').value;
+        const selectedCustomerId = document.getElementById('selectedCustomerId').value;
+        const customerSearch = document.getElementById('customerSearch');
+        const customerError = document.getElementById('customerError');
+        const paidAmountInput = document.getElementById('paidAmountInput');
+        let paidAmount = 0;
+        if (paymentType === 'credit' && paidAmountInput) {
+            paidAmount = parseFloat(paidAmountInput.value) || 0;
+            if (paidAmount < 0) paidAmount = 0;
+            if (paidAmount > cartTotal) paidAmount = cartTotal;
+        }
+
+        // التحقق من اختيار العميل في حالة البيع الآجل
+        if (paymentType === 'credit') {
+            if (!selectedCustomerId) {
+                customerSearch.classList.add('is-invalid');
+                customerError.style.display = 'block';
+                customerError.textContent = 'يجب اختيار عميل للبيع الآجل';
+                return;
+            } else {
+                customerSearch.classList.remove('is-invalid');
+                customerError.style.display = 'none';
+            }
+        }
+
+        const completeSaleBtn = document.getElementById('completeSaleBtn');
+        completeSaleBtn.disabled = true;
+        completeSaleBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري المعالجة...';
+
+        const saleData = {
+            items: cartItems,
+            total_amount: cartTotal,
+            payment_type: paymentType,
+            customer_id: paymentType === 'credit' ? parseInt(selectedCustomerId) : null,
+            notes: document.getElementById('saleNotes').value,
+            paid_amount: paidAmount
+        };
+
+        fetch('/api/sales', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrf_token
+            },
+            body: JSON.stringify(saleData)
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('saleNumber').textContent = '#' + data.sale_id;
+                    document.getElementById('saleAmount').textContent = cartTotal.toFixed(2) + ' ج.م';
+
+                    const successModal = new bootstrap.Modal(document.getElementById('successModal'));
+                    successModal.show();
+
+                    // إعادة تعيين النموذج
+                    startNewSale();
+
+                    // إعادة تحميل المنتجات والعملاء لتحديث البيانات
+                    loadProducts();
+                    if (paymentType === 'credit') {
+                        loadCustomers(); // لتحديث الديون
+                    }
+                } else {
+                    alert(data.error || 'حدث خطأ أثناء إتمام البيع');
+                }
+            })
+            .catch(error => {
+                console.error('Error completing sale:', error);
+                alert('حدث خطأ أثناء إتمام البيع');
+            })
+            .finally(() => {
+                completeSaleBtn.disabled = false;
+                completeSaleBtn.innerHTML = '<i class="bi bi-check-circle"></i> إتمام البيع';
+            });
+    }
+
+    function startNewSale() {
+        cartItems = [];
+        cartTotal = 0;
+        updateCart();
+        document.getElementById('saleNotes').value = '';
+        document.getElementById('productSearch').value = '';
+
+        // إعادة تعيين نوع الدفع إلى نقدي
+        document.getElementById('cashPayment').checked = true;
+        document.getElementById('creditPayment').checked = false;
+        togglePaymentType();
+
+        // إخفاء النماذج
+        hideAddCustomerForm();
+
+        // إعادة تعيين اختيار العميل
+        document.getElementById('customerSearch').value = '';
+        document.getElementById('selectedCustomerId').value = '';
+        document.getElementById('customerDropdown').classList.remove('show');
+
+        const successModal = bootstrap.Modal.getInstance(document.getElementById('successModal'));
+        if (successModal) {
+            successModal.hide();
+        }
+
+        loadProducts();
+    }
+
+    function increaseQuantity(button) {
+        const quantityInput = button.parentElement.querySelector('.item-quantity-input');
+        const index = parseInt(quantityInput.dataset.index);
+        const productId = parseInt(quantityInput.dataset.productId);
+        const product = products.find(p => p.id === productId);
+
+        if (!product) return;
+
+        const newQuantity = cartItems[index].quantity + (product.unit_type === 'جزئي' ? 1 : 0.01);
+
+        if (newQuantity <= product.stock) {
+            cartItems[index].quantity = newQuantity;
+            cartItems[index].total_price = cartItems[index].quantity * cartItems[index].unit_price;
+            updateCart();
+        } else {
+            alert('الكمية المطلوبة تتجاوز المخزون المتاح');
+        }
+    }
+
+    function decreaseQuantity(button) {
+        const quantityInput = button.parentElement.querySelector('.item-quantity-input');
+        const index = parseInt(quantityInput.dataset.index);
+        const productId = parseInt(quantityInput.dataset.productId);
+        const product = products.find(p => p.id === productId);
+
+        if (!product) return;
+
+        const newQuantity = cartItems[index].quantity - (product.unit_type === 'جزئي' ? 1 : 0.01);
+
+        if (newQuantity > 0) {
+            cartItems[index].quantity = newQuantity;
+            cartItems[index].total_price = cartItems[index].quantity * cartItems[index].unit_price;
+            updateCart();
+        } else {
+            // إذا وصلت الكمية إلى صفر أو أقل، احذف المنتج من السلة
+            cartItems.splice(index, 1);
+            updateCart();
+        }
+    }
+
+    function updateItemQuantity(input) {
+        const index = parseInt(input.dataset.index);
+        const productId = parseInt(input.dataset.productId);
+        const product = products.find(p => p.id === productId);
+        const newQuantity = parseFloat(input.value);
+
+        if (!product) return;
+
+        if (newQuantity <= 0) {
+            // احذف المنتج إذا كانت الكمية صفر أو أقل
+            cartItems.splice(index, 1);
+            updateCart();
+            return;
+        }
+
+        if (newQuantity > product.stock) {
+            alert('الكمية المطلوبة تتجاوز المخزون المتاح (' + product.stock + ')');
+            input.value = cartItems[index].quantity; // إرجاع القيمة السابقة
+            return;
+        }
+
+        cartItems[index].quantity = newQuantity;
+        cartItems[index].total_price = cartItems[index].quantity * cartItems[index].unit_price;
+        updateCart();
+    }
+
+    // Customer and payment functions
+    function loadCustomers() {
+        fetch('/api/customers')
+            .then(response => response.json())
+            .then(customers => {
+                allCustomers = customers;
+                populateCustomerDropdown(customers);
+            })
+            .catch(error => {
+                console.error('Error loading customers:', error);
+            });
+    }
+
+    function populateCustomerDropdown(customers) {
+        const dropdown = document.getElementById('customerDropdown');
+        dropdown.innerHTML = '';
+
+        if (customers.length === 0) {
+            dropdown.innerHTML = '<div class="dropdown-item text-center text-muted"><em>لا توجد عملاء مطابقين</em></div>';
+            return;
+        }
+
+        // إضافة عداد النتائج
+        if (customers.length < allCustomers.length) {
+            const header = document.createElement('div');
+            header.className = 'dropdown-header';
+            header.innerHTML = `<i class="bi bi-search me-1"></i>النتائج: ${customers.length} من ${allCustomers.length}`;
+            dropdown.appendChild(header);
+
+            const divider = document.createElement('div');
+            divider.className = 'dropdown-divider';
+            dropdown.appendChild(divider);
+        }
+
+        customers.forEach(customer => {
+            const item = document.createElement('div');
+            item.className = 'dropdown-item d-flex justify-content-between align-items-center';
+            item.style.cursor = 'pointer';
+            item.innerHTML = `
+                <div>
+                    <strong>${customer.name}</strong>
+                    ${customer.phone ? `<br><small class="text-muted"><i class="bi bi-telephone me-1"></i>${customer.phone}</small>` : ''}
+                    ${customer.address ? `<br><small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${customer.address}</small>` : ''}
+                </div>
+                <div class="text-end">
+                    ${customer.debt > 0 ?
+                    `<span class="badge bg-danger mb-1">${customer.debt.toFixed(2)} ج.م</span><br><small class="text-danger">دين مستحق</small>` :
+                    `<span class="badge bg-success mb-1">لا توجد ديون</span>`
+                }
+                </div>
+            `;
+
+            // إضافة تأثير hover
+            item.addEventListener('mouseenter', () => {
+                item.classList.add('bg-light');
+            });
+            item.addEventListener('mouseleave', () => {
+                item.classList.remove('bg-light');
+            });
+
+            item.addEventListener('click', () => selectCustomer(customer));
+            dropdown.appendChild(item);
+        });
+    }
+
+    function selectCustomer(customer) {
+        document.getElementById('customerSearch').value = customer.name;
+        document.getElementById('selectedCustomerId').value = customer.id;
+        document.getElementById('customerDropdown').classList.remove('show');
+        document.getElementById('customerSearch').classList.remove('is-invalid');
+        document.getElementById('customerError').style.display = 'none';
+    }
+
+    function showCustomerDropdown() {
+        if (allCustomers.length === 0) {
+            loadCustomers();
+        }
+        document.getElementById('customerDropdown').classList.add('show');
+    }
+
+    function filterCustomers() {
+        const searchTerm = document.getElementById('customerSearch').value.toLowerCase();
+
+        if (searchTerm.length === 0) {
+            document.getElementById('selectedCustomerId').value = '';
+            populateCustomerDropdown(allCustomers);
+            return;
+        }
+
+        const filteredCustomers = allCustomers.filter(customer =>
+            customer.name.toLowerCase().includes(searchTerm) ||
+            (customer.phone && customer.phone.includes(searchTerm))
+        );
+
+        populateCustomerDropdown(filteredCustomers);
+        document.getElementById('customerDropdown').classList.add('show');
+    }
+
+    // إخفاء القائمة عند النقر خارجها
+    document.addEventListener('click', function (event) {
+        const customerSelection = document.getElementById('customerSelection');
+        const dropdown = document.getElementById('customerDropdown');
+
+        if (customerSelection && !customerSelection.contains(event.target)) {
+            dropdown.classList.remove('show');
+        }
+    });
+
+    // التنقل بلوحة المفاتيح
+    let selectedIndex = -1;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const customerSearchInput = document.getElementById('customerSearch');
+        if (customerSearchInput) {
+            customerSearchInput.addEventListener('keydown', function (e) {
+                const dropdown = document.getElementById('customerDropdown');
+                const items = dropdown.querySelectorAll('.dropdown-item:not(.dropdown-header):not(.dropdown-divider)');
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+                    updateSelection(items);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    selectedIndex = Math.max(selectedIndex - 1, 0);
+                    updateSelection(items);
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (selectedIndex >= 0 && items[selectedIndex]) {
+                        items[selectedIndex].click();
+                    }
+                } else if (e.key === 'Escape') {
+                    dropdown.classList.remove('show');
+                    selectedIndex = -1;
+                }
+            });
+        }
+    });
+
+    function updateSelection(items) {
+        items.forEach((item, index) => {
+            if (index === selectedIndex) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+    }
+
+    function togglePaymentType() {
+        const paymentType = document.querySelector('input[name="paymentType"]:checked').value;
+        const customerSelection = document.getElementById('customerSelection');
+        const customerError = document.getElementById('customerError');
+        const paidAmountGroup = document.getElementById('paidAmountGroup');
+
+        if (paymentType === 'credit') {
+            customerSelection.style.display = 'block';
+            if (allCustomers.length === 0) {
+                loadCustomers();
+            }
+            paidAmountGroup.style.display = 'block';
+        } else {
+            customerSelection.style.display = 'none';
+            customerError.style.display = 'none';
+            document.getElementById('customerSearch').classList.remove('is-invalid');
+            paidAmountGroup.style.display = 'none';
+        }
+    }
+
+    function showAddCustomerForm() {
+        document.getElementById('quickAddCustomer').style.display = 'block';
+    }
+
+    function hideAddCustomerForm() {
+        document.getElementById('quickAddCustomer').style.display = 'none';
+        document.getElementById('newCustomerName').value = '';
+        document.getElementById('newCustomerPhone').value = '';
+    }
+
+    function addQuickCustomer() {
+        const name = document.getElementById('newCustomerName').value.trim();
+        const phone = document.getElementById('newCustomerPhone').value.trim();
+
+        if (!name) {
+            alert('يجب إدخال اسم العميل');
+            return;
+        }
+
+        const customerData = {
+            name: name,
+            phone: phone,
+            address: '',
+            notes: 'عميل جديد - تم إنشاؤه من صفحة البيع'
+        };
+
+        fetch('/customers/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrf_token
+            },
+            body: JSON.stringify(customerData)
+        })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                }
+                throw new Error('Failed to add customer');
+            })
+            .then(data => {
+                if (data.success) {
+                    loadCustomers(); // إعادة تحميل قائمة العملاء
+                    hideAddCustomerForm();
+
+                    // اختيار العميل الجديد تلقائياً
+                    setTimeout(() => {
+                        const newCustomer = allCustomers.find(c => c.id === data.customer_id);
+                        if (newCustomer) {
+                            selectCustomer(newCustomer);
+                        }
+                    }, 500);
+
+                    alert('تم إضافة العميل بنجاح');
+                } else {
+                    alert(data.error || 'حدث خطأ أثناء إضافة العميل');
+                }
+            })
+            .catch(error => {
+                console.error('Error adding customer:', error);
+                alert('حدث خطأ أثناء إضافة العميل');
+            });
+    }
+</script>
+{% endblock %}

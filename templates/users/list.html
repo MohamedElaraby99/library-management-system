@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}إدارة المستخدمين - نظام إدارة المكتبة{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-3">
+                        <i class="bi bi-people"></i>
+                        إدارة المستخدمين
+                    </h1>
+                    <p class="text-muted">إدارة حسابات المستخدمين والصلاحيات</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('add_user') }}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i>
+                        إضافة مستخدم جديد
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-white">
+            <h5 class="card-title mb-0">قائمة المستخدمين</h5>
+        </div>
+        <div class="card-body p-0">
+            {% if users %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>اسم المستخدم</th>
+                            <th>الدور</th>
+                            <th>تاريخ الإنشاء</th>
+                            <th>عدد المبيعات</th>
+                            <th>الحالة</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr class="{% if user.id == current_user.id %}table-info{% endif %}">
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="avatar-circle me-2 
+                                        {% if user.role == 'admin' %}bg-danger{% else %}bg-primary{% endif %}">
+                                        <i class="bi bi-person text-white"></i>
+                                    </div>
+                                    <div>
+                                        <strong>{{ user.username }}</strong>
+                                        {% if user.id == current_user.id %}
+                                        <small class="text-muted">(أنت)</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                {% if user.role == 'admin' %}
+                                <span class="badge bg-danger">
+                                    <i class="bi bi-shield-check"></i> مدير
+                                </span>
+                                {% else %}
+                                <span class="badge bg-primary">
+                                    <i class="bi bi-person-badge"></i> بائع
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>{{ user.created_at|arabic_date }}</td>
+                            <td>
+                                <span class="badge bg-secondary">{{ user.sales|length }}</span>
+                            </td>
+                            <td>
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle"></i> نشط
+                                </span>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    {% if user.id != current_user.id %}
+                                    <a href="{{ url_for('edit_user', id=user.id) }}" class="btn btn-outline-primary"
+                                        title="تعديل المستخدم">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    {% if user.sales|length == 0 %}
+                                    <button type="button" class="btn btn-outline-danger" title="حذف المستخدم"
+                                        data-bs-toggle="modal" data-bs-target="#deleteModal"
+                                        data-user-id="{{ user.id }}" data-user-name="{{ user.username }}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                    {% else %}
+                                    <button type="button" class="btn btn-outline-secondary"
+                                        title="لا يمكن الحذف - المستخدم لديه مبيعات" disabled>
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                    {% endif %}
+                                    {% else %}
+                                    <button type="button" class="btn btn-outline-secondary"
+                                        title="لا يمكنك تعديل أو حذف حسابك الشخصي" disabled>
+                                        <i class="bi bi-lock"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-people text-muted" style="font-size: 4rem;"></i>
+                <h4 class="text-muted mt-3">لا يوجد مستخدمون</h4>
+                <p class="text-muted">أضف أول مستخدم للنظام</p>
+                <a href="{{ url_for('add_user') }}" class="btn btn-primary">إضافة مستخدم جديد</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteModalLabel">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    تأكيد حذف المستخدم
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-3">
+                    <i class="bi bi-person-x text-danger" style="font-size: 3rem;"></i>
+                </div>
+                <p class="text-center mb-3">
+                    هل أنت متأكد من رغبتك في حذف المستخدم <strong id="userNameToDelete"></strong>؟
+                </p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-info-circle me-2"></i>
+                    سيتم حذف جميع بيانات المستخدم ولا يمكن التراجع عن هذا الإجراء!
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-2"></i>
+                    إلغاء
+                </button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-2"></i>
+                        حذف المستخدم
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .avatar-circle {
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const deleteModal = document.getElementById('deleteModal');
+
+        if (deleteModal) {
+            const userNameSpan = document.getElementById('userNameToDelete');
+            const deleteForm = document.getElementById('deleteForm');
+
+            deleteModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const userId = button.getAttribute('data-user-id');
+                const userName = button.getAttribute('data-user-name');
+
+                if (userNameSpan && userName) {
+                    userNameSpan.textContent = userName;
+                }
+
+                if (deleteForm && userId) {
+                    deleteForm.action = `/users/${userId}/delete`;
+                }
+            });
+
+            // Handle form submission
+            deleteForm.addEventListener('submit', function (e) {
+                // Add loading state
+                const submitBtn = this.querySelector('button[type="submit"]');
+                submitBtn.innerHTML = '<i class="spinner-border spinner-border-sm me-2"></i>جاري الحذف...';
+                submitBtn.disabled = true;
+            });
+        }
+    });
+</script>
+
+{% endblock %}

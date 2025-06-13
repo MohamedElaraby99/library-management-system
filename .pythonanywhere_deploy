@@ -1,0 +1,142 @@
+# دليل النشر الكامل لنظام إدارة المكتبة على PythonAnywhere
+
+## خطوات النشر:
+
+### 1. إنشاء حساب PythonAnywhere
+- اذهب إلى https://www.pythonanywhere.com/
+- أنشئ حساب مجاني أو مدفوع
+- ادخل إلى لوحة التحكم
+
+### 2. رفع الملفات
+```bash
+# في console الخاص بـ PythonAnywhere
+git clone https://github.com/yourusername/library-system.git
+# أو ارفع الملفات يدوياً من خلال Files tab
+```
+
+### 3. تثبيت المتطلبات
+```bash
+cd library-system
+pip3.10 install --user -r requirements.txt
+```
+
+### 4. تعديل ملف wsgi.py
+```python
+# غير في ملف wsgi.py:
+path = '/home/yourusername/library-system'  # ضع اسم المستخدم الخاص بك
+os.environ['SECRET_KEY'] = 'your-strong-secret-key-here'  # مفتاح سري قوي
+os.environ['DATABASE_URL'] = 'sqlite:////home/yourusername/library-system/library.db'
+```
+
+### 5. إعداد Web App
+- اذهب إلى Web tab في PythonAnywhere
+- اضغط Add a new web app
+- اختر Manual configuration
+- اختر Python 3.10
+- في Code section:
+  - Source code: /home/yourusername/library-system
+  - WSGI configuration file: /var/www/yourusername_pythonanywhere_com_wsgi.py
+
+### 6. تعديل ملف WSGI الخاص بـ PythonAnywhere
+```python
+# احذف المحتوى الموجود واستبدله بـ:
+import sys
+import os
+
+# Add your project directory to the Python path
+path = '/home/yourusername/library-system'
+if path not in sys.path:
+    sys.path.insert(0, path)
+
+# Set environment variables
+os.environ['FLASK_ENV'] = 'production'
+os.environ['SECRET_KEY'] = 'your-production-secret-key-here'
+os.environ['DATABASE_URL'] = 'sqlite:////home/yourusername/library-system/library.db'
+
+from app import app as application
+```
+
+### 7. إعداد Static Files
+في Web tab، أضف في Static files section:
+- URL: /static/
+- Directory: /home/yourusername/library-system/static/
+
+### 8. إعداد قاعدة البيانات
+```bash
+cd /home/yourusername/library-system
+python3.10 deploy_setup.py
+```
+
+### 9. إعادة تحميل التطبيق
+- في Web tab، اضغط على "Reload yourusername.pythonanywhere.com"
+
+### 10. اختبار النظام
+- اذهب إلى yourusername.pythonanywhere.com
+- جرب تسجيل الدخول بـ:
+  - مدير: araby / 92321066
+  - بائع: seller / seller123
+
+## ملاحظات مهمة:
+
+### الأمان:
+- غير SECRET_KEY إلى مفتاح قوي وفريد
+- فعّل HTTPS في PythonAnywhere (متوفر في الحسابات المدفوعة)
+- غير كلمات مرور المستخدمين الافتراضية
+
+### قاعدة البيانات:
+- يتم حفظ قاعدة البيانات في مجلد المشروع
+- قم بعمل نسخ احتياطية دورية من ملف library.db
+
+### التحديثات:
+```bash
+# لتحديث المشروع:
+cd /home/yourusername/library-system
+git pull origin main  # إذا كنت تستخدم Git
+# أو ارفع الملفات المحدثة يدوياً
+# ثم أعد تحميل التطبيق من Web tab
+```
+
+### مراقبة الأخطاء:
+- راجع Error log في Web tab إذا حدثت مشاكل
+- راجع Server log للمعلومات العامة
+
+### النسخة المجانية vs المدفوعة:
+- المجانية: yourusername.pythonanywhere.com
+- المدفوعة: يمكنك استخدام نطاق مخصص
+
+## استكشاف الأخطاء:
+
+### خطأ في الاستيراد:
+```bash
+# تأكد من تثبيت جميع المتطلبات:
+pip3.10 install --user -r requirements.txt
+```
+
+### خطأ في قاعدة البيانات:
+```bash
+# أعد إنشاء قاعدة البيانات:
+rm library.db
+python3.10 deploy_setup.py
+```
+
+### خطأ 500:
+- راجع Error log في Web tab
+- تأكد من صحة مسار الملفات في wsgi.py
+
+### خطأ في Static Files:
+- تأكد من إعداد Static files صحيح في Web tab
+- تأكد من وجود مجلد static
+
+## نصائح إضافية:
+
+1. **النسخ الاحتياطي**: قم بعمل نسخة احتياطية من library.db بشكل دوري
+2. **الأداء**: راقب استخدام CPU في الحساب المجاني (محدود)
+3. **الأمان**: فعّل HTTPS للحسابات المدفوعة
+4. **المراقبة**: راجع logs بانتظام لمراقبة النظام
+
+## دعم فني:
+- مجتمع PythonAnywhere: https://www.pythonanywhere.com/forums/
+- التوثيق: https://help.pythonanywhere.com/
+
+تم إعداد النظام بواسطة Fikra Software
+https://fikra.solutions/ 

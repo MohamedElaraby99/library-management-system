@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}نظام إدارة المكتبة{% endblock %}</title>
+
+    <!-- Bootstrap 5 RTL CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+
+    <style>
+        body {
+            padding-top: 80px;
+            padding-bottom: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.3rem;
+            color: white !important;
+        }
+
+        .nav-link {
+            color: rgba(255, 255, 255, 0.9) !important;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            border-radius: 8px;
+            margin: 0 2px;
+        }
+
+        .nav-link:hover,
+        .nav-link:focus {
+            color: white !important;
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-1px);
+            border-radius: 8px;
+        }
+
+        .dropdown-menu {
+            border: none;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            z-index: 1050 !important;
+            position: absolute !important;
+        }
+
+        .navbar-nav .dropdown {
+            position: relative;
+            z-index: 1040;
+        }
+
+        .navbar-modern {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            box-shadow: 0 4px 20px rgba(30, 60, 114, 0.3);
+            backdrop-filter: blur(10px);
+            border: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            z-index: 1030;
+
+        }
+
+        .btn-outline-warning,
+        .btn-success,
+        .btn-outline-light {
+            border-radius: 20px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline-warning:hover,
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        main {
+            flex: 1;
+            padding-top: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .footer-modern {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-top: auto;
+            border-top: 3px solid #2a5298;
+        }
+
+        .footer-content {
+            text-align: center;
+        }
+
+        .footer-link {
+            color: white !important;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .footer-link:hover {
+            transform: scale(1.05);
+            text-shadow: 0 2px 10px rgba(255, 255, 255, 0.3);
+            color: #e0f2fe !important;
+        }
+
+        .footer-text {
+            font-size: 0.95rem;
+            opacity: 0.9;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #1a355e 0%, #235084 100%);
+            box-shadow: 0 2px 10px rgba(42, 82, 152, 0.3);
+        }
+
+        /* Firefox Scrollbar */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: #2a5298 #f1f1f1;
+        }
+
+        @media (max-width: 768px) {
+            .navbar-nav {
+                text-align: center;
+            }
+
+            .navbar-brand {
+                font-size: 1.1rem;
+            }
+
+            /* Smaller scrollbar on mobile */
+            ::-webkit-scrollbar {
+                width: 6px;
+            }
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body class="bg-light">
+    <!-- Navigation -->
+    {% if current_user.is_authenticated %}
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-modern">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+                <i class="bi bi-book"></i>
+                نظام إدارة المكتبة
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">
+                            <i class="bi bi-speedometer2"></i> لوحة التحكم
+                        </a>
+                    </li>
+
+                    <!-- قائمة المنتجات -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-box"></i> المنتجات
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('products') }}">
+                                    <i class="bi bi-list"></i> عرض المنتجات
+                                </a></li>
+                            {% if current_user.is_admin() %}
+                            <li><a class="dropdown-item" href="{{ url_for('add_product') }}">
+                                    <i class="bi bi-plus-circle"></i> إضافة منتج
+                                </a></li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li><a class="dropdown-item" href="{{ url_for('categories') }}">
+                                    <i class="bi bi-tags"></i> الفئات
+                                </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('update_stock') }}">
+                                    <i class="bi bi-arrow-up-circle"></i> تحديث المخزون
+                                </a></li>
+                            {% endif %}
+                        </ul>
+                    </li>
+
+                    <!-- قائمة المبيعات -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-cart"></i> المبيعات
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('new_sale') }}">
+                                    <i class="bi bi-plus-circle"></i> بيع جديد
+                                </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('sales') }}">
+                                    <i class="bi bi-list"></i> عرض المبيعات
+                                </a></li>
+                        </ul>
+                    </li>
+
+                    <!-- قائمة العملاء والديون -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-people"></i> العملاء
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('customers') }}">
+                                    <i class="bi bi-list"></i> عرض العملاء
+                                </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('add_customer') }}">
+                                    <i class="bi bi-person-plus"></i> إضافة عميل
+                                </a></li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li><a class="dropdown-item" href="{{ url_for('debts_report') }}">
+                                    <i class="bi bi-exclamation-triangle text-danger"></i> الديون المستحقة
+                                </a></li>
+                        </ul>
+                    </li>
+
+                    {% if current_user.role in ['admin', 'seller'] %}
+                    <!-- قائمة التقارير والإحصائيات -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-graph-up"></i> التقارير
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('reports') }}">
+                                    <i class="bi bi-bar-chart"></i> تقارير المبيعات
+                                </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('debts_report') }}">
+                                    <i class="bi bi-exclamation-triangle"></i> تقرير الديون
+                                </a></li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li><a class="dropdown-item" href="{{ url_for('products') }}?stock_status=low">
+                                    <i class="bi bi-exclamation-circle text-warning"></i> مخزون منخفض
+                                </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('products') }}?stock_status=out">
+                                    <i class="bi bi-x-circle text-danger"></i> نفد المخزون
+                                </a></li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <!-- <li><a class="dropdown-item" href="{{ url_for('test_export') }}">
+                                    <i class="bi bi-bug text-info"></i> اختبار التصدير
+                                </a></li> -->
+                        </ul>
+                    </li>
+
+                    <!-- قائمة الإدارة -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-gear"></i> الإدارة
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <h6 class="dropdown-header">إدارة النظام</h6>
+                            </li>
+                            <li><a class="dropdown-item" href="{{ url_for('categories') }}">
+                                    <i class="bi bi-tags"></i> إدارة الفئات
+                                </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('update_stock') }}">
+                                    <i class="bi bi-arrow-up-circle"></i> تحديث المخزون
+                                </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('expenses') }}">
+                                    <i class="bi bi-cash-coin"></i> إدارة المصاريف
+                                </a></li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <h6 class="dropdown-header">المستخدمين</h6>
+                            </li>
+                            <li><a class="dropdown-item" href="{{ url_for('users') }}">
+                                    <i class="bi bi-people"></i> إدارة المستخدمين
+                                </a></li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <!-- <li>
+                                <h6 class="dropdown-header">النسخ الاحتياطي</h6>
+                            </li> -->
+                            <!-- <li><a class="dropdown-item" href="#">
+                                    <i class="bi bi-download"></i> تصدير البيانات
+                                </a></li> -->
+                        </ul>
+                    </li>
+                    {% endif %}
+                </ul>
+
+                <div class="d-flex">
+                    <!-- مؤشر الديون -->
+                    {% if global_total_debt > 0 %}
+                    <a href="{{ url_for('debts_report') }}"
+                        class="btn btn-outline-warning btn-sm me-2 position-relative" title="الديون المستحقة">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        ديون
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                            {{ global_customers_with_debt }}
+                        </span>
+                    </a>
+                    {% endif %}
+
+                    <!-- زر البيع السريع -->
+                    <a href="{{ url_for('new_sale') }}" class="btn btn-success btn-sm me-2" title="بيع جديد">
+                        <i class="bi bi-plus-circle me-1"></i>بيع سريع
+                    </a>
+
+                    <span class="navbar-text me-3">
+                        مرحباً، {{ current_user.username }}
+                        {% if current_user.is_admin() %}
+                        <span class="badge bg-warning">مدير</span>
+                        {% else %}
+                        <span class="badge bg-info">بائع</span>
+                        {% endif %}
+                    </span>
+                    <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">
+                        <i class="bi bi-box-arrow-right"></i> خروج
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <!-- Main Content -->
+    <main class="container-fluid">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show"
+            role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer-modern">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-text">
+                    جميع الحقوق محفوظة © 2025 |
+                    Powered by
+                    <a href="https://fikra.solutions/" target="_blank" class="footer-link">
+                        Fikra Software
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Chart.js for charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+
+</html>

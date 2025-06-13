@@ -1,0 +1,783 @@
+{% extends "base.html" %}
+
+{% block title %}المبيعات - نظام إدارة المكتبة{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-3">
+                        <i class="bi bi-cart-check"></i>
+                        إدارة المبيعات
+                    </h1>
+                    <p class="text-muted">عرض وتتبع جميع عمليات البيع</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('new_sale') }}" class="btn btn-success">
+                        <i class="bi bi-plus-circle"></i>
+                        بيع جديد
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sales Table -->
+    <div class="card">
+        <div class="card-header bg-white">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-list-ul"></i>
+                قائمة المبيعات
+                <span class="badge bg-secondary ms-2">{{ sales.total }} عملية بيع</span>
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            {% if sales.items %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>رقم البيع</th>
+                            <th>التاريخ والوقت</th>
+                            <th>إجمالي المبلغ</th>
+                            <th>البائع</th>
+                            <th>عدد الأصناف</th>
+                            <th>الملاحظات</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sale in sales.items %}
+                        <tr class="sale-row" data-sale-id="{{ sale.id }}" onclick="viewSaleDetails({{ sale.id }})"
+                            style="cursor: pointer;">
+                            <td>
+                                <strong class="text-primary">#{{ sale.id }}</strong>
+                            </td>
+                            <td>
+                                {{ sale.sale_date.strftime('%d/%m/%Y') }}<br>
+                                <small class="text-muted">{{ sale.sale_date.strftime('%H:%M') }}</small>
+                            </td>
+                            <td class="currency text-success fw-bold">
+                                {{ sale.total_amount|currency }}
+                            </td>
+                            <td>
+                                {{ sale.user.username }}
+                                {% if sale.user.is_admin() %}
+                                <span class="badge bg-warning text-dark">مدير</span>
+                                {% else %}
+                                <span class="badge bg-info">بائع</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-primary">{{ sale.sale_items|length }} صنف</span>
+                            </td>
+                            <td>
+                                {% if sale.notes %}
+                                <span class="text-truncate" style="max-width: 200px;" title="{{ sale.notes }}">
+                                    {{ sale.notes[:50] }}{% if sale.notes|length > 50 %}...{% endif %}
+                                </span>
+                                {% else %}
+                                <small class="text-muted">لا توجد ملاحظات</small>
+                                {% endif %}
+                            </td>
+                            <td onclick="event.stopPropagation()">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button type="button" class="btn btn-outline-info"
+                                        onclick="viewSaleDetails({{ sale.id }})" title="تفاصيل البيع">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary"
+                                        onclick="printSale({{ sale.id }})" title="طباعة الفاتورة">
+                                        <i class="bi bi-printer"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if sales.pages > 1 %}
+            <div class="card-footer bg-white">
+                <nav aria-label="صفحات المبيعات">
+                    <ul class="pagination pagination-sm justify-content-center mb-0">
+                        {% if sales.has_prev %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('sales', page=sales.prev_num) }}">السابق</a>
+                        </li>
+                        {% endif %}
+
+                        {% for page_num in sales.iter_pages() %}
+                        {% if page_num %}
+                        {% if page_num != sales.page %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('sales', page=page_num) }}">{{ page_num }}</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ page_num }}</span>
+                        </li>
+                        {% endif %}
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+
+                        {% if sales.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('sales', page=sales.next_num) }}">التالي</a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-cart-x text-muted" style="font-size: 4rem;"></i>
+                <h4 class="text-muted mt-3">لا توجد مبيعات</h4>
+                <p class="text-muted">لم يتم تسجيل أي عمليات بيع حتى الآن</p>
+                <a href="{{ url_for('new_sale') }}" class="btn btn-success">
+                    <i class="bi bi-plus-circle"></i>
+                    إجراء أول عملية بيع
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Sale Details Modal -->
+<div class="modal fade" id="saleDetailsModal" tabindex="-1" aria-labelledby="saleDetailsModalLabel">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="saleDetailsModalLabel">
+                    <i class="bi bi-receipt"></i>
+                    تفاصيل البيع
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="saleDetailsContent">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">جاري التحميل...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                <button type="button" class="btn btn-primary" onclick="printCurrentSale()">
+                    <i class="bi bi-printer"></i>
+                    طباعة
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<style>
+    .sale-row {
+        transition: all 0.3s ease;
+    }
+
+    .sale-row:hover {
+        background-color: #f8f9fa !important;
+        transform: scale(1.01);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .sale-row:hover .text-primary {
+        color: #0d6efd !important;
+        font-weight: bold;
+    }
+
+    .invoice-details .card {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .invoice-details .card-header {
+        border-bottom: none;
+    }
+
+    .modal-dialog {
+        max-width: 900px;
+    }
+
+    .table th {
+        border-top: none;
+    }
+
+    .badge {
+        font-size: 0.8em;
+    }
+
+    .modal-backdrop.show {
+        opacity: 0.01 !important;
+        pointer-events: none !important;
+    }
+</style>
+
+<script>
+    let currentSaleId = null;
+
+    function viewSaleDetails(saleId) {
+        currentSaleId = saleId;
+        const modal = new bootstrap.Modal(document.getElementById('saleDetailsModal'));
+        const content = document.getElementById('saleDetailsContent');
+
+        // Show loading
+        content.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">جاري التحميل...</span>
+            </div>
+            <p class="mt-2">جاري تحميل تفاصيل البيع...</p>
+        </div>
+    `;
+
+        modal.show();
+
+        // Fetch sale details
+        fetch(`/api/sales/${saleId}`)
+            .then(response => response.json())
+            .then(sale => {
+                content.innerHTML = generateSaleDetailsHTML(sale);
+            })
+            .catch(error => {
+                content.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    حدث خطأ في تحميل تفاصيل البيع
+                </div>
+            `;
+            });
+    }
+
+    function generateSaleDetailsHTML(sale) {
+        let itemsHTML = '';
+        let total = 0;
+
+        sale.items.forEach((item, index) => {
+            const rowClass = index % 2 === 0 ? 'table-light' : '';
+            itemsHTML += `
+            <tr class="${rowClass}">
+                <td>
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-box text-primary me-2"></i>
+                        <div>
+                            <div class="fw-bold">${item.product_name}</div>
+                            <small class="text-muted">${item.unit_type || 'وحدة'}</small>
+                        </div>
+                    </div>
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-info">${item.quantity}</span>
+                </td>
+                <td class="text-center text-primary fw-bold">${item.unit_price.toFixed(2)} ج.م</td>
+                <td class="text-center text-success fw-bold">${item.total_price.toFixed(2)} ج.م</td>
+            </tr>
+        `;
+            total += item.total_price;
+        });
+
+        const saleDate = new Date(sale.sale_date);
+        const userBadge = sale.user_role === 'admin' ?
+            '<span class="badge bg-warning text-dark">مدير</span>' :
+            '<span class="badge bg-info">بائع</span>';
+
+        return `
+        <div class="invoice-details">
+            <div class="row mb-4">
+                <div class="col-md-8">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>معلومات البيع</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-6">
+                                    <p class="mb-2">
+                                        <i class="bi bi-hash text-primary me-2"></i>
+                                        <strong>رقم البيع:</strong> 
+                                        <span class="text-primary">#${sale.id}</span>
+                                    </p>
+                                    <p class="mb-2">
+                                        <i class="bi bi-calendar3 text-success me-2"></i>
+                                        <strong>التاريخ:</strong> 
+                                        ${saleDate.toLocaleDateString('ar-EG')}
+                                    </p>
+                                </div>
+                                <div class="col-6">
+                                    <p class="mb-2">
+                                        <i class="bi bi-clock text-warning me-2"></i>
+                                        <strong>الوقت:</strong> 
+                                        ${saleDate.toLocaleTimeString('ar-EG')}
+                                    </p>
+                                    <p class="mb-2">
+                                        <i class="bi bi-person text-info me-2"></i>
+                                        <strong>البائع:</strong> 
+                                        ${sale.user_name} ${userBadge}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-success">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0"><i class="bi bi-chat-dots me-2"></i>الملاحظات</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-0">
+                                ${sale.notes || '<em>لا توجد ملاحظات</em>'}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="bi bi-list-ul me-2"></i>
+                        تفاصيل الأصناف
+                        <span class="badge bg-secondary ms-2">${sale.items.length} صنف</span>
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th><i class="bi bi-box me-1"></i>المنتج</th>
+                                    <th class="text-center"><i class="bi bi-123 me-1"></i>الكمية</th>
+                                    <th class="text-center"><i class="bi bi-currency-exchange me-1"></i>سعر الوحدة</th>
+                                    <th class="text-center"><i class="bi bi-calculator me-1"></i>الإجمالي</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${itemsHTML}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer bg-success text-white">
+                    <div class="row align-items-center">
+                        <div class="col-8">
+                            <h5 class="mb-0">
+                                <i class="bi bi-cash-stack me-2"></i>
+                                المجموع الكلي:
+                            </h5>
+                        </div>
+                        <div class="col-4 text-end">
+                            <h4 class="mb-0 fw-bold">${total.toFixed(2)} ج.م</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    }
+
+    function printSale(saleId) {
+        currentSaleId = saleId;
+        printCurrentSale();
+    }
+
+    function printCurrentSale() {
+        if (!currentSaleId) return;
+
+        // Create a new window for printing
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+        <html dir="rtl">
+        <head>
+            <title>فاتورة رقم ${currentSaleId}</title>
+            <meta charset="UTF-8">
+            <style>
+                * { box-sizing: border-box; }
+                
+                body { 
+                    font-family: 'Segoe UI', Tahoma, Arial, sans-serif; 
+                    margin: 0; 
+                    padding: 20px;
+                    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+                    color: #333;
+                    line-height: 1.6;
+                }
+                
+                .invoice-container {
+                    max-width: 800px;
+                    margin: 0 auto;
+                    background: white;
+                    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+                    border-radius: 10px;
+                    overflow: hidden;
+                }
+                
+                .header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 30px;
+                    text-align: center;
+                    position: relative;
+                }
+                
+                .header::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="75" cy="75" r="1" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+                    opacity: 0.1;
+                }
+                
+                .header h1 {
+                    margin: 0;
+                    font-size: 2.5rem;
+                    font-weight: 300;
+                    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+                    position: relative;
+                    z-index: 1;
+                }
+                
+                .header h2 {
+                    margin: 10px 0 0 0;
+                    font-size: 1.2rem;
+                    font-weight: 400;
+                    opacity: 0.9;
+                    position: relative;
+                    z-index: 1;
+                }
+                
+                .invoice-body {
+                    padding: 30px;
+                }
+                
+                .invoice-info {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 30px;
+                    margin-bottom: 30px;
+                    padding: 20px;
+                    background: #f8f9fa;
+                    border-radius: 8px;
+                    border-left: 4px solid #667eea;
+                }
+                
+                .invoice-details h3 {
+                    color: #667eea;
+                    margin: 0 0 15px 0;
+                    font-size: 1.1rem;
+                    border-bottom: 2px solid #e9ecef;
+                    padding-bottom: 5px;
+                }
+                
+                .invoice-details p {
+                    margin: 8px 0;
+                    display: flex;
+                    justify-content: space-between;
+                }
+                
+                .invoice-details .label {
+                    font-weight: 600;
+                    color: #495057;
+                }
+                
+                .invoice-details .value {
+                    color: #6c757d;
+                }
+                
+                .items-section {
+                    margin-top: 30px;
+                }
+                
+                .items-header {
+                    background: #667eea;
+                    color: white;
+                    padding: 15px 20px;
+                    margin: 0 -30px 20px -30px;
+                }
+                
+                .items-header h3 {
+                    margin: 0;
+                    font-size: 1.2rem;
+                }
+                
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-bottom: 20px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    border-radius: 8px;
+                    overflow: hidden;
+                }
+                
+                th {
+                    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+                    color: white;
+                    padding: 15px;
+                    text-align: center;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    font-size: 0.9rem;
+                }
+                
+                td {
+                    padding: 12px 15px;
+                    text-align: center;
+                    border-bottom: 1px solid #e9ecef;
+                    transition: background-color 0.3s ease;
+                }
+                
+                tr:nth-child(even) td {
+                    background-color: #f8f9fa;
+                }
+                
+                tr:hover td {
+                    background-color: #e3f2fd;
+                }
+                
+                .product-name {
+                    text-align: right !important;
+                    font-weight: 600;
+                    color: #495057;
+                }
+                
+                .quantity {
+                    background: #e3f2fd;
+                    color: #1976d2;
+                    font-weight: 600;
+                    border-radius: 20px;
+                    padding: 5px 12px;
+                    display: inline-block;
+                }
+                
+                .price {
+                    color: #2e7d32;
+                    font-weight: 600;
+                }
+                
+                .total-section {
+                    background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+                    color: white;
+                    padding: 20px;
+                    margin: 20px -30px -30px -30px;
+                    text-align: center;
+                }
+                
+                .total-amount {
+                    font-size: 2rem;
+                    font-weight: 300;
+                    margin: 10px 0;
+                    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+                }
+                
+                .footer {
+                    text-align: center;
+                    margin-top: 30px;
+                    padding: 20px;
+                    border-top: 2px dashed #dee2e6;
+                    color: #6c757d;
+                }
+                
+                .no-print {
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    display: flex;
+                    gap: 10px;
+                }
+                
+                .no-print button {
+                    padding: 12px 24px;
+                    border: none;
+                    border-radius: 25px;
+                    cursor: pointer;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+                
+                .print-btn {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                }
+                
+                .close-btn {
+                    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                    color: white;
+                }
+                
+                .no-print button:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                }
+                
+                @media print {
+                    body { background: white !important; padding: 0 !important; }
+                    .no-print { display: none !important; }
+                    .invoice-container { box-shadow: none !important; }
+                    .total-section { margin-bottom: 0 !important; }
+                }
+                
+                .company-info {
+                    font-size: 0.9rem;
+                    opacity: 0.8;
+                    margin-top: 10px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="invoice-container">
+                <div class="header">
+                    <h1>📚 مكتبة الأحلام</h1>
+                    <h2>فاتورة بيع</h2>
+                    <div class="company-info">
+                        <p>📍 123 شارع المعرفة، القاهرة | 📞 02-1234-5678 | 📧 info@dreamlibrary.com</p>
+                    </div>
+                </div>
+                <div class="invoice-body">
+                    <div id="invoice-content">
+                        <div style="text-align: center; padding: 50px;">
+                            <div style="border: 3px solid #667eea; border-radius: 50%; width: 60px; height: 60px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;">
+                                <div style="width: 20px; height: 20px; border: 2px solid #667eea; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                            </div>
+                            <p style="color: #667eea; font-size: 1.1rem;">جاري تحميل الفاتورة...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="no-print">
+                <button class="print-btn" onclick="window.print()">🖨️ طباعة</button>
+                <button class="close-btn" onclick="window.close()">❌ إغلاق</button>
+            </div>
+            
+            <style>
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            </style>
+        </body>
+        </html>
+    `);
+
+        // Fetch and display invoice content
+        fetch(`/api/sales/${currentSaleId}`)
+            .then(response => response.json())
+            .then(sale => {
+                const content = generatePrintableInvoice(sale);
+                printWindow.document.getElementById('invoice-content').innerHTML = content;
+            })
+            .catch(error => {
+                printWindow.document.getElementById('invoice-content').innerHTML = `
+                    <div style="text-align: center; padding: 50px; color: #dc3545;">
+                        <h3>❌ حدث خطأ في تحميل الفاتورة</h3>
+                        <p>يرجى المحاولة مرة أخرى</p>
+                    </div>
+                `;
+            });
+    }
+
+    function generatePrintableInvoice(sale) {
+        let itemsHTML = '';
+        let total = 0;
+
+        sale.items.forEach((item, index) => {
+            itemsHTML += `
+            <tr>
+                <td class="product-name">
+                    <div style="display: flex; align-items: center;">
+                        <span style="background: #667eea; color: white; padding: 5px 10px; border-radius: 50%; margin-left: 10px; font-size: 0.8rem;">${index + 1}</span>
+                        <div>
+                            <div style="font-weight: 600;">${item.product_name}</div>
+                            <small style="color: #6c757d;">${item.unit_type || 'وحدة'}</small>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <span class="quantity">${item.quantity}</span>
+                </td>
+                <td class="price">${item.unit_price.toFixed(2)} ج.م</td>
+                <td class="price" style="font-weight: 700;">${item.total_price.toFixed(2)} ج.م</td>
+            </tr>
+        `;
+            total += item.total_price;
+        });
+
+        const saleDate = new Date(sale.sale_date);
+        const userBadge = sale.user_role === 'admin' ?
+            '<span style="background: #ffc107; color: #212529; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">مدير</span>' :
+            '<span style="background: #17a2b8; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">بائع</span>';
+
+        return `
+        <div class="invoice-info">
+            <div class="invoice-details">
+                <h3>📋 معلومات الفاتورة</h3>
+                <p><span class="label">رقم البيع:</span> <span class="value" style="color: #667eea; font-weight: 700;">#${sale.id}</span></p>
+                <p><span class="label">التاريخ:</span> <span class="value">${saleDate.toLocaleDateString('ar-EG')}</span></p>
+                <p><span class="label">الوقت:</span> <span class="value">${saleDate.toLocaleTimeString('ar-EG')}</span></p>
+                <p><span class="label">البائع:</span> <span class="value">${sale.user_name} ${userBadge}</span></p>
+            </div>
+            <div class="invoice-details">
+                <h3>📝 الملاحظات</h3>
+                <p style="color: #6c757d; font-style: italic;">
+                    ${sale.notes || 'لا توجد ملاحظات'}
+                </p>
+            </div>
+        </div>
+        
+        <div class="items-section">
+            <div class="items-header">
+                <h3>🛒 تفاصيل المشتريات (${sale.items.length} صنف)</h3>
+            </div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th style="text-align: right;">📦 المنتج</th>
+                        <th>🔢 الكمية</th>
+                        <th>💰 سعر الوحدة</th>
+                        <th>💵 الإجمالي</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemsHTML}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="total-section">
+            <h3 style="margin: 0; font-size: 1.5rem;">💰 المجموع الكلي</h3>
+            <div class="total-amount">${total.toFixed(2)} ج.م</div>
+            <p style="margin: 10px 0 0 0; opacity: 0.9;">تم الدفع نقداً</p>
+        </div>
+        
+        <div class="footer">
+            <p style="font-size: 1.1rem; margin: 0; color: #667eea;">🙏 شكراً لتعاملكم معنا</p>
+            <p style="margin: 10px 0 0 0;">نتمنى لكم يوماً سعيداً ومليئاً بالمعرفة</p>
+            <p style="margin: 10px 0 0 0; font-size: 0.9rem;">تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')} - ${new Date().toLocaleTimeString('ar-EG')}</p>
+        </div>
+    `;
+    }
+</script>
+{% endblock %}
