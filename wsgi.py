@@ -1,28 +1,26 @@
-#!/usr/bin/python3
+#!/usr/bin/python3.10
+
+"""
+WSGI configuration for PythonAnywhere deployment
+This file is used by PythonAnywhere to serve the Flask application
+"""
 
 import sys
 import os
-from dotenv import load_dotenv
 
-# إضافة مسار المشروع إلى Python path
-path = '/home/system99/library-management-system'
-if path not in sys.path:
-    sys.path.append(path)
+# Add your project directory to the sys.path
+# Change 'yourusername' to your actual PythonAnywhere username
+project_home = '/home/yourusername/library-management-system'
+if project_home not in sys.path:
+    sys.path = [project_home] + sys.path
 
-# تحميل متغيرات البيئة
-load_dotenv(os.path.join(path, '.env'))
+# Set environment variable for configuration
+os.environ['FLASK_CONFIG'] = 'pythonanywhere'
 
-# Set environment variables for production
-os.environ['FLASK_CONFIG'] = 'production'
-os.environ['FLASK_ENV'] = 'production'
-os.environ['SECRET_KEY'] = 'your-production-secret-key-here'  # Change this to a strong secret key
-os.environ['DATABASE_URL'] = 'sqlite:////home/system99/library-system/library.db'  # Updated for your PythonAnywhere username
-
-# تعيين متغير البيئة
-os.environ['FLASK_APP'] = 'app.py'
-
-# استيراد التطبيق
+# Import your Flask application
 from app import app as application
 
+# Initialize the application for production
 if __name__ == "__main__":
-    application.run() 
+    # This won't be called in production, but useful for testing
+    application.run(debug=False) 
