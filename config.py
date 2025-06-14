@@ -7,7 +7,7 @@ load_dotenv()
 
 class Config:
     """Base configuration class"""
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'tafra-student-system-2025-production'
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'library-system-2025-production'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Database configuration
@@ -22,7 +22,7 @@ class Config:
         SQLALCHEMY_DATABASE_URI = 'sqlite:///library.db'
     
     # Application settings
-    APP_NAME = os.environ.get('APP_NAME', 'نظام إدارة طفرة')
+    APP_NAME = os.environ.get('APP_NAME', 'نظام إدارة المكتبة')
     APP_VERSION = os.environ.get('APP_VERSION', '1.0.0')
     
     # Upload settings
@@ -74,7 +74,7 @@ class PythonAnywhereConfig(Config):
     DEBUG = False
     
     # PythonAnywhere database path - change 'yourusername' to your actual username
-    SQLALCHEMY_DATABASE_URI = 'sqlite:////home/yourusername/mysite/tafra_system.db'
+    SQLALCHEMY_DATABASE_URI = 'sqlite:////home/yourusername/mysite/library.db'
     
     # Security settings
     SESSION_COOKIE_SECURE = False  # Set to True if using HTTPS
