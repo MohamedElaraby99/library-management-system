@@ -15,35 +15,50 @@
 </head>
 
 <body class="bg-light">
-<div class="container">
+    <div class="container">
         <div class="row justify-content-center align-items-center" style="min-height: 100vh;">
-        <div class="col-md-4">
-            <div class="card shadow-lg">
-                <div class="card-body p-5">
-                    <div class="text-center mb-4">
+            <div class="col-md-4">
+                <div class="card shadow-lg">
+                    <div class="card-body p-5">
+                        <div class="text-center mb-4">
                             <div class="icon-container mb-3">
                                 <i class="bi bi-journal-text text-primary" style="font-size: 3.5rem;"></i>
                             </div>
-                        <h3 class="mt-3 mb-1">نظام إدارة المكتبة</h3>
+                            <h3 class="mt-3 mb-1">نظام إدارة المكتبة</h3>
                             <p class="text-muted mb-0">مرحباً بك، يرجى تسجيل الدخول للمتابعة</p>
-                    </div>
-
-                    <form method="POST">
-                        {{ form.hidden_tag() }}
-
-                        <div class="mb-3">
-                            {{ form.username.label(class="form-label fw-bold") }}
-                                {{ form.username(class="form-control form-control-lg", placeholder="أدخل اسم المستخدم",
-                                id="username") }}
-                            {% if form.username.errors %}
-                            <div class="text-danger small mt-1">
-                                {% for error in form.username.errors %}{{ error }}{% endfor %}
-                            </div>
-                            {% endif %}
                         </div>
 
+                        <!-- عرض رسائل الخطأ والنجاح -->
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                        {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else 'success' if category == 'success' else 'warning' if category == 'warning' else 'info' }} alert-dismissible fade show"
+                            role="alert">
+                            <i
+                                class="bi bi-{{ 'exclamation-triangle' if category == 'error' else 'check-circle' if category == 'success' else 'info-circle' }}"></i>
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        {% endfor %}
+                        {% endif %}
+                        {% endwith %}
+
+                        <form method="POST">
+                            {{ form.hidden_tag() }}
+
                             <div class="mb-3">
-                            {{ form.password.label(class="form-label fw-bold") }}
+                                {{ form.username.label(class="form-label fw-bold") }}
+                                {{ form.username(class="form-control form-control-lg", placeholder="أدخل اسم المستخدم",
+                                id="username") }}
+                                {% if form.username.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.username.errors %}{{ error }}{% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                {{ form.password.label(class="form-label fw-bold") }}
                                 <div class="input-group">
                                     {{ form.password(class="form-control form-control-lg", placeholder="أدخل كلمة
                                     المرور",
@@ -52,12 +67,12 @@
                                         <i class="bi bi-eye" id="eyeIcon"></i>
                                     </button>
                                 </div>
-                            {% if form.password.errors %}
-                            <div class="text-danger small mt-1">
-                                {% for error in form.password.errors %}{{ error }}{% endfor %}
+                                {% if form.password.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.password.errors %}{{ error }}{% endfor %}
+                                </div>
+                                {% endif %}
                             </div>
-                            {% endif %}
-                        </div>
 
                             <div class="mb-4">
                                 <div class="form-check">
@@ -66,10 +81,27 @@
                                 </div>
                             </div>
 
-                        <div class="d-grid">
-                            {{ form.submit(class="btn btn-primary btn-lg") }}
+                            <div class="d-grid">
+                                {{ form.submit(class="btn btn-primary btn-lg") }}
+                            </div>
+
+
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Footer للمطور -->
+                <div class="text-center mt-4">
+                    <div class="developer-footer">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <i class="bi bi-palette text-muted me-2"></i>
+                            <span class="text-muted">تصميم وتطوير</span>
+                            <a href="https://fikra.solutions/" target="_blank"
+                                class="fw-bold text-decoration-none mx-2 developer-link">
+                                شركة فكرة
+                            </a>
+                            <i class="bi bi-heart-fill text-danger"></i>
                         </div>
-                    </form>
                     </div>
                 </div>
             </div>
@@ -79,17 +111,17 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-<style>
-    body {
+    <style>
+        body {
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-        min-height: 100vh;
+            min-height: 100vh;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             padding: 0 !important;
-    }
+        }
 
-    .card {
-        border: none;
-        border-radius: 20px;
+        .card {
+            border: none;
+            border-radius: 20px;
             backdrop-filter: blur(10px);
             background: rgba(255, 255, 255, 0.95);
             box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
@@ -99,9 +131,9 @@
             border-radius: 12px;
             border: 2px solid #e9ecef;
             transition: all 0.3s ease;
-    }
+        }
 
-    .form-control:focus {
+        .form-control:focus {
             border-color: #1e3c72;
             box-shadow: 0 0 0 0.2rem rgba(30, 60, 114, 0.15);
             transform: translateY(-1px);
@@ -202,8 +234,95 @@
 
         #togglePassword {
             color: #6c757d;
-    }
-</style>
+        }
+
+        /* تحسين مظهر رسائل التحذير */
+        .alert {
+            border: none;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            padding: 15px 20px;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .alert-danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            color: white;
+            border-left: 4px solid #ff4757;
+        }
+
+        .alert-success {
+            background: linear-gradient(135deg, #26de81 0%, #20bf6b 100%);
+            color: white;
+            border-left: 4px solid #2ed573;
+        }
+
+        .alert-warning {
+            background: linear-gradient(135deg, #feca57 0%, #ff9f43 100%);
+            color: white;
+            border-left: 4px solid #ff6348;
+        }
+
+        .alert-info {
+            background: linear-gradient(135deg, #54a0ff 0%, #2e86de 100%);
+            color: white;
+            border-left: 4px solid #5f27cd;
+        }
+
+        .alert .btn-close {
+            filter: brightness(0) invert(1);
+            opacity: 0.8;
+        }
+
+        .alert .btn-close:hover {
+            opacity: 1;
+        }
+
+        .alert i {
+            margin-left: 8px;
+        }
+
+        /* استايل footer المطور */
+        .developer-footer {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 25px;
+            padding: 15px 25px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .developer-footer:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .developer-link {
+            color: #1e3c72 !important;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            transition: all 0.3s ease;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .developer-link:hover {
+            transform: scale(1.05);
+            filter: brightness(1.1);
+        }
+
+        @media (max-width: 768px) {
+            .developer-footer {
+                padding: 12px 20px;
+                font-size: 0.85rem;
+            }
+        }
+    </style>
 
     <script>
         // Password visibility toggle

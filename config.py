@@ -7,19 +7,20 @@ load_dotenv()
 
 class Config:
     """Base configuration class"""
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'library-system-2025-production'
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Security
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-key-change-in-production'
+    WTF_CSRF_ENABLED = True
+    WTF_CSRF_TIME_LIMIT = 3600  # 1 hour
     
     # Database configuration
-    DATABASE_URL = os.environ.get('DATABASE_URL')
-    if DATABASE_URL:
-        # Railway/Heroku provides PostgreSQL URL, handle protocol properly
-        if DATABASE_URL.startswith('postgres://'):
-            DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
-        SQLALCHEMY_DATABASE_URI = DATABASE_URL
-    else:
-        # Fallback to SQLite for development
-        SQLALCHEMY_DATABASE_URI = 'sqlite:///library.db'
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_RECORD_QUERIES = True
+    
+    # Session configuration
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=24)
+    SESSION_COOKIE_SECURE = False  # Set to True for HTTPS
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
     
     # Application settings
     APP_NAME = os.environ.get('APP_NAME', 'نظام إدارة المكتبة')
@@ -27,85 +28,121 @@ class Config:
     
     # Upload settings
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
+    UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'uploads')
     
-    # Production optimizations
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_pre_ping': True,
-        'pool_recycle': 300,
-        'pool_timeout': 20,
-        'max_overflow': 0
+    # Email settings (for password reset)
+    MAIL_SERVER = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
+    MAIL_PORT = int(os.environ.get('MAIL_PORT', 587))
+    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'true').lower() in ['true', 'on', '1']
+    MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
+    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER')
+    
+    # Security headers
+    SECURITY_HEADERS = {
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'X-XSS-Protection': '1; mode=block',
+        'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' cdnjs.cloudflare.com fonts.googleapis.com; font-src 'self' fonts.gstatic.com; img-src 'self' data:;"
     }
+    
+    # Logging
+    LOG_TO_STDOUT = os.environ.get('LOG_TO_STDOUT')
+    LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 
 class DevelopmentConfig(Config):
     """Development configuration"""
-    FLASK_ENV = 'development'
     DEBUG = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///library.db'
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DEV_DATABASE_URL') or 'sqlite:///library_dev.db'
+    SQLALCHEMY_ECHO = True
+    
+    # Disable CSRF for easier development
+    WTF_CSRF_ENABLED = False
+    
+    # Development mail settings (console backend)
+    MAIL_DEBUG = True
+    MAIL_SUPPRESS_SEND = False
 
 class ProductionConfig(Config):
-    """Production configuration for PythonAnywhere"""
-    FLASK_ENV = 'production'
+    """Production configuration for VPS deployment"""
     DEBUG = False
+    TESTING = False
     
-    # PythonAnywhere SQLite database path
-    # Update this path according to your PythonAnywhere username
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:////home/yourusername/mysite/library.db'
+    # Database configuration
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
+        f"postgresql://{os.environ.get('DB_USER')}:{os.environ.get('DB_PASSWORD')}@{os.environ.get('DB_HOST', 'localhost')}/{os.environ.get('DB_NAME')}"
     
     # Security settings for production
-    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True  # Requires HTTPS
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
+    WTF_CSRF_ENABLED = True
     
-    # Additional production settings
-    PERMANENT_SESSION_LIFETIME = 86400  # 24 hours
+    # Rate limiting
+    RATELIMIT_STORAGE_URL = os.environ.get('REDIS_URL') or 'memory://'
     
-    # SQLite optimizations for production
+    # Performance settings
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
         'pool_timeout': 20,
-        'max_overflow': 0,
+        'max_overflow': 20,
+        'pool_size': 10,
         'echo': False
     }
-
-class PythonAnywhereConfig(Config):
-    """Specific configuration for PythonAnywhere deployment"""
-    FLASK_ENV = 'production'
-    DEBUG = False
     
-    # PythonAnywhere database path - change 'yourusername' to your actual username
-    SQLALCHEMY_DATABASE_URI = 'sqlite:////home/yourusername/mysite/library.db'
+    # Logging
+    LOG_TO_STDOUT = True
+    LOG_LEVEL = 'WARNING'
+
+class VPSConfig(Config):
+    """Specific configuration for VPS deployment with SQLite fallback"""
+    DEBUG = False
+    TESTING = False
+    
+    # Database configuration with fallback to SQLite
+    DATABASE_URL = os.environ.get('DATABASE_URL')
+    if DATABASE_URL:
+        if DATABASE_URL.startswith('postgres://'):
+            DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+        SQLALCHEMY_DATABASE_URI = DATABASE_URL
+    else:
+        # SQLite fallback for VPS
+        SQLALCHEMY_DATABASE_URI = f"sqlite:///{os.path.abspath('library_production.db')}"
     
     # Security settings
-    SESSION_COOKIE_SECURE = False  # Set to True if using HTTPS
+    SESSION_COOKIE_SECURE = os.environ.get('HTTPS_ENABLED', 'false').lower() == 'true'
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
+    WTF_CSRF_ENABLED = True
     
-    # Performance settings for shared hosting
+    # Performance settings optimized for VPS
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
         'pool_timeout': 20,
-        'max_overflow': 0,
-        'echo': False,
-        'pool_size': 10
+        'max_overflow': 10,
+        'pool_size': 5,
+        'echo': False
     }
     
-    # Additional settings
-    PERMANENT_SESSION_LIFETIME = 86400  # 24 hours
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
+    # Logging
+    LOG_TO_STDOUT = True
+    LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 
 class TestingConfig(Config):
     """Testing configuration"""
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     WTF_CSRF_ENABLED = False
+    LOGIN_DISABLED = True
 
 # Configuration dictionary
 config = {
     'development': DevelopmentConfig,
     'production': ProductionConfig,
-    'pythonanywhere': PythonAnywhereConfig,
+    'vps': VPSConfig,
     'testing': TestingConfig,
     'default': DevelopmentConfig
 } 

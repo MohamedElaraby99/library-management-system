@@ -1,11 +1,17 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
+from flask_mail import Mail, Message
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_talisman import Talisman
 from datetime import datetime, timedelta
 from sqlalchemy import func, desc, and_
 import json
 import os
+import logging
+import secrets
 
 from config import config
 from models import db, User, Category, Product, Sale, SaleItem, Customer, Payment, Expense
@@ -21,10 +27,43 @@ app.config.from_object(config[config_name])
 db.init_app(app)
 migrate = Migrate(app, db)
 csrf = CSRFProtect(app)
+
+# Initialize security extensions
+mail = Mail(app)
+
+# Rate limiting (disabled in development)
+if not app.debug:
+    limiter = Limiter(
+        key_func=get_remote_address,
+        app=app,
+        default_limits=["1000 per hour"]
+    )
+else:
+    # Mock limiter for development
+    class MockLimiter:
+        def limit(self, *args, **kwargs):
+            def decorator(f):
+                return f
+            return decorator
+    limiter = MockLimiter()
+
+# Security headers (production only)
+if not app.debug and app.config.get('FLASK_CONFIG') != 'development':
+    try:
+        Talisman(
+            app,
+            force_https=app.config.get('SESSION_COOKIE_SECURE', False),
+            content_security_policy=app.config.get('SECURITY_HEADERS', {}).get('Content-Security-Policy')
+        )
+    except Exception as e:
+        app.logger.warning(f"Could not initialize Talisman: {e}")
+
+# Login manager
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 login_manager.login_message = 'يرجى تسجيل الدخول للوصول إلى هذه الصفحة'
+login_manager.session_protection = 'strong'
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -81,6 +120,7 @@ def index():
     return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
@@ -88,23 +128,179 @@ def login():
     form = LoginForm()
     if form.validate_on_submit():
         # تصفية اسم المستخدم من المسافات
-        username = form.username.data.strip()
+        username = form.username.data.strip().lower()
         
         user = User.query.filter_by(username=username).first()
-        if user and user.check_password(form.password.data):
-            # تسجيل الدخول مع خيار التذكر
-            login_user(user, remember=form.remember_me.data)
-            next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('dashboard'))
+        
+        if user:
+            # Check if account is locked
+            if user.is_account_locked():
+                flash('تم قفل الحساب مؤقتاً بسبب محاولات دخول خاطئة متعددة. يرجى المحاولة لاحقاً.', 'error')
+                return render_template('auth/login.html', form=form)
+            
+            # Check if account is active
+            if not user.is_active:
+                flash('هذا الحساب غير نشط. يرجى الاتصال بالمدير.', 'error')
+                return render_template('auth/login.html', form=form)
+            
+            # Verify password
+            if user.check_password(form.password.data):
+                # Check if password has expired
+                if user.is_password_expired():
+                    flash('انتهت صلاحية كلمة المرور. يرجى تغييرها.', 'warning')
+                    session['pending_user_id'] = user.id
+                    return redirect(url_for('change_password'))
+                
+                # تسجيل الدخول مع خيار التذكر
+                login_user(user, remember=form.remember_me.data)
+                
+                # Log successful login
+                app.logger.info(f'User {username} logged in successfully from IP {request.remote_addr}')
+                
+                next_page = request.args.get('next')
+                return redirect(next_page) if next_page else redirect(url_for('dashboard'))
+            else:
+                # Log failed login attempt
+                app.logger.warning(f'Failed login attempt for user {username} from IP {request.remote_addr}')
+        
         flash('اسم المستخدم أو كلمة المرور غير صحيحة', 'error')
+    
     return render_template('auth/login.html', form=form)
 
 @app.route('/logout')
 @login_required
 def logout():
+    # Log user logout
+    app.logger.info(f'User {current_user.username} logged out from IP {request.remote_addr}')
     logout_user()
+    session.clear()  # Clear all session data
     flash('تم تسجيل الخروج بنجاح', 'success')
     return redirect(url_for('login'))
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+@limiter.limit("5 per minute")
+def forgot_password():
+    """Password reset request"""
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        user = User.query.filter_by(email=email).first()
+        
+        if user and user.is_active:
+            # Generate reset token
+            token = user.generate_password_reset_token()
+            
+            # Send password reset email
+            try:
+                send_password_reset_email(user, token)
+                flash('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني', 'success')
+            except Exception as e:
+                app.logger.error(f'Failed to send password reset email: {str(e)}')
+                flash('حدث خطأ في إرسال البريد الإلكتروني. يرجى المحاولة لاحقاً.', 'error')
+        else:
+            # Same message for security (don't reveal if email exists)
+            flash('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني', 'success')
+        
+        return redirect(url_for('login'))
+    
+    return render_template('auth/forgot_password.html')
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+@limiter.limit("5 per minute")
+def reset_password(token):
+    """Reset password with token"""
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
+    # Find user with valid token
+    user = None
+    for u in User.query.all():
+        if u.verify_password_reset_token(token):
+            user = u
+            break
+    
+    if not user:
+        flash('رابط إعادة تعيين كلمة المرور غير صالح أو منتهي الصلاحية', 'error')
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        new_password = request.form.get('password', '').strip()
+        confirm_password = request.form.get('confirm_password', '').strip()
+        
+        # Validate password
+        if len(new_password) < 8:
+            flash('كلمة المرور يجب أن تكون 8 أحرف على الأقل', 'error')
+        elif new_password != confirm_password:
+            flash('كلمات المرور غير متطابقة', 'error')
+        else:
+            # Reset password
+            user.reset_password(new_password)
+            flash('تم تغيير كلمة المرور بنجاح. يمكنك الآن تسجيل الدخول.', 'success')
+            return redirect(url_for('login'))
+    
+    return render_template('auth/reset_password.html', token=token)
+
+@app.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    """Change password for logged-in user"""
+    if request.method == 'POST':
+        current_password = request.form.get('current_password', '').strip()
+        new_password = request.form.get('new_password', '').strip()
+        confirm_password = request.form.get('confirm_password', '').strip()
+        
+        # Verify current password
+        if not current_user.check_password(current_password):
+            flash('كلمة المرور الحالية غير صحيحة', 'error')
+        elif len(new_password) < 8:
+            flash('كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل', 'error')
+        elif new_password != confirm_password:
+            flash('كلمات المرور الجديدة غير متطابقة', 'error')
+        else:
+            # Change password
+            current_user.set_password(new_password)
+            db.session.commit()
+            flash('تم تغيير كلمة المرور بنجاح', 'success')
+            
+            # Clear pending user session if exists
+            session.pop('pending_user_id', None)
+            return redirect(url_for('dashboard'))
+    
+    return render_template('auth/change_password.html')
+
+def send_password_reset_email(user, token):
+    """Send password reset email"""
+    if not app.config.get('MAIL_USERNAME'):
+        raise Exception("Email not configured")
+    
+    subject = 'إعادة تعيين كلمة المرور - نظام إدارة المكتبة'
+    reset_url = url_for('reset_password', token=token, _external=True)
+    
+    body = f"""
+    مرحباً {user.username},
+    
+    تم طلب إعادة تعيين كلمة المرور لحسابك.
+    
+    للمتابعة، اضغط على الرابط التالي:
+    {reset_url}
+    
+    هذا الرابط صالح لمدة ساعة واحدة فقط.
+    
+    إذا لم تطلب إعادة تعيين كلمة المرور، يرجى تجاهل هذه الرسالة.
+    
+    تحياتنا،
+    فريق نظام إدارة المكتبة
+    """
+    
+    msg = Message(
+        subject=subject,
+        recipients=[user.email],
+        body=body
+    )
+    
+    mail.send(msg)
 
 @app.route('/dashboard')
 @login_required
@@ -946,6 +1142,55 @@ def api_quick_payment():
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
 
+@app.route('/api/stock-status')
+@login_required
+def api_stock_status():
+    """API endpoint for real-time stock monitoring"""
+    try:
+        # Get products with low stock or out of stock
+        critical_products = Product.query.filter(Product.stock_quantity <= 0).all()
+        low_stock_products = Product.query.filter(
+            and_(Product.stock_quantity > 0, 
+                 Product.stock_quantity <= Product.min_stock_threshold)
+        ).all()
+        
+        new_alerts = []
+        
+        # Add critical stock alerts (out of stock)
+        for product in critical_products:
+            new_alerts.append({
+                'type': 'critical',
+                'product_name': product.name_ar,
+                'current_stock': product.stock_quantity,
+                'min_threshold': product.min_stock_threshold or 10,
+                'message': f'نفدت كمية {product.name_ar} من المخزون'
+            })
+        
+        # Add low stock alerts
+        for product in low_stock_products:
+            new_alerts.append({
+                'type': 'warning',
+                'product_name': product.name_ar,
+                'current_stock': product.stock_quantity,
+                'min_threshold': product.min_stock_threshold or 10,
+                'message': f'كمية {product.name_ar} منخفضة في المخزون'
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'new_alerts': new_alerts,
+            'critical_count': len(critical_products),
+            'low_stock_count': len(low_stock_products),
+            'timestamp': datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': 'حدث خطأ في مراقبة المخزون',
+            'new_alerts': []
+        }), 500
+
 @app.route('/api/export/inventory')
 @login_required
 def api_export_inventory():
@@ -1748,70 +1993,150 @@ def debug_export():
 def api_export_full_database():
     if current_user.role not in ['admin', 'seller']:
         abort(403)
-    from models import Product, Category, Customer, User, Sale, SaleItem, Payment, Expense
-    from sqlalchemy import func, desc
-    data = {}
-    # ملخص التقرير
-    total_revenue = db.session.query(func.sum(Sale.total_amount)).scalar() or 0
-    total_sales_count = Sale.query.count()
-    total_customers = Customer.query.count()
-    total_products = Product.query.count()
-    total_debts = sum(getattr(c, 'total_debt', 0) for c in Customer.query.all())
-    data['report_summary'] = [{
-        'إجمالي المبيعات': total_revenue,
-        'عدد عمليات البيع': total_sales_count,
-        'عدد العملاء': total_customers,
-        'عدد المنتجات': total_products,
-        'إجمالي الديون': total_debts
-    }]
-    # المبيعات
-    data['sales'] = [
-        {
-            'id': s.id,
-            'sale_date': str(s.sale_date),
-            'total_amount': float(s.total_amount),
-            'user_id': s.user_id,
-            'customer_id': getattr(s, 'customer_id', None),
-            'payment_type': getattr(s, 'payment_type', ''),
-            'payment_status': getattr(s, 'payment_status', ''),
-            'notes': s.notes
-        } for s in Sale.query.all()
-    ]
-    # تفاصيل المبيعات
-    data['sale_items'] = [
-        {
-            'id': si.id,
-            'sale_id': si.sale_id,
-            'product_id': si.product_id,
-            'quantity': float(si.quantity),
-            'unit_price': float(si.unit_price),
-            'total_price': float(si.total_price)
-        } for si in SaleItem.query.all()
-    ]
-    # العملاء
-    data['customers'] = [
-        {
-            'id': c.id,
-            'name': c.name,
-            'phone': c.phone,
-            'debt': getattr(c, 'total_debt', 0)
-        } for c in Customer.query.all()
-    ]
-    # الديون (العملاء مع الديون غير المسددة)
-    debts = []
-    for c in Customer.query.all():
-        if getattr(c, 'total_debt', 0) > 0:
-            # آخر تاريخ بيع غير مسدد
-            last_unpaid_sale = Sale.query.filter_by(customer_id=c.id).filter(Sale.payment_status.in_(['unpaid', 'partial'])).order_by(desc(Sale.sale_date)).first()
-            last_sale_date = str(last_unpaid_sale.sale_date) if last_unpaid_sale else ''
-            debts.append({
-                'اسم العميل': c.name,
-                'رقم الهاتف': c.phone,
-                'إجمالي الدين': getattr(c, 'total_debt', 0),
-                'آخر بيع غير مسدد': last_sale_date
+    
+    try:
+        data = {}
+        
+        # Basic report summary
+        data['report_summary'] = [{
+            'تاريخ التقرير': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'عدد المنتجات': Product.query.count(),
+            'عدد العملاء': Customer.query.count(),
+            'عدد المبيعات': Sale.query.count(),
+            'عدد الفئات': Category.query.count()
+        }]
+        
+        # Products - basic info only
+        products_data = []
+        for p in Product.query.all():
+            products_data.append({
+                'رقم المنتج': p.id,
+                'اسم المنتج': p.name_ar,
+                'سعر الجملة': float(p.wholesale_price),
+                'سعر البيع': float(p.retail_price),
+                'الكمية': float(p.stock_quantity),
+                'نوع الوحدة': p.unit_type,
+                'الحد الأدنى': float(p.min_stock_threshold)
             })
-    data['debts'] = debts
-    return jsonify(data)
+        data['products'] = products_data
+        
+        # Categories
+        categories_data = []
+        for c in Category.query.all():
+            categories_data.append({
+                'رقم الفئة': c.id,
+                'اسم الفئة': c.name_ar,
+                'الوصف': c.description_ar or ''
+            })
+        data['categories'] = categories_data
+        
+        # Customers
+        customers_data = []
+        for c in Customer.query.all():
+            customers_data.append({
+                'رقم العميل': c.id,
+                'اسم العميل': c.name,
+                'الهاتف': c.phone or '',
+                'العنوان': c.address or '',
+                'ملاحظات': c.notes or ''
+            })
+        data['customers'] = customers_data
+        
+        # Sales - basic info only
+        sales_data = []
+        for s in Sale.query.all():
+            sales_data.append({
+                'رقم البيع': s.id,
+                'تاريخ البيع': str(s.sale_date),
+                'المبلغ': float(s.total_amount),
+                'نوع الدفع': s.payment_type,
+                'حالة الدفع': s.payment_status,
+                'ملاحظات': s.notes or ''
+            })
+        data['sales'] = sales_data
+        
+        # Sale Items
+        sale_items_data = []
+        for si in SaleItem.query.all():
+            sale_items_data.append({
+                'رقم البيع': si.sale_id,
+                'رقم المنتج': si.product_id,
+                'الكمية': float(si.quantity),
+                'سعر الوحدة': float(si.unit_price),
+                'الإجمالي': float(si.total_price)
+            })
+        data['sale_items'] = sale_items_data
+        
+        # Payments
+        payments_data = []
+        for p in Payment.query.all():
+            payments_data.append({
+                'رقم الدفعة': p.id,
+                'رقم البيع': p.sale_id,
+                'المبلغ': float(p.amount),
+                'تاريخ الدفع': str(p.payment_date),
+                'طريقة الدفع': p.payment_method,
+                'ملاحظات': p.notes or ''
+            })
+        data['payments'] = payments_data
+        
+        # Expenses
+        expenses_data = []
+        for e in Expense.query.all():
+            expenses_data.append({
+                'رقم المصروف': e.id,
+                'الوصف': e.description,
+                'المبلغ': float(e.amount),
+                'النوع': e.expense_type,
+                'التاريخ': str(e.expense_date),
+                'ملاحظات': e.notes or ''
+            })
+        data['expenses'] = expenses_data
+        
+        # Users (admin only)
+        if current_user.role == 'admin':
+            users_data = []
+            for u in User.query.all():
+                users_data.append({
+                    'رقم المستخدم': u.id,
+                    'اسم المستخدم': u.username,
+                    'الدور': u.role,
+                    'تاريخ الإنشاء': str(u.created_at)
+                })
+            data['users'] = users_data
+        
+        return jsonify(data)
+        
+    except Exception as e:
+        # Log the actual error for debugging
+        print(f"Export error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'error': 'حدث خطأ في تصدير البيانات',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/export/test-database')
+@login_required
+def api_test_database_export():
+    """Simple test endpoint for database export"""
+    try:
+        data = {
+            'status': 'success',
+            'message': 'Test endpoint working',
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'products_count': Product.query.count(),
+            'customers_count': Customer.query.count(),
+            'sales_count': Sale.query.count()
+        }
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 if __name__ == '__main__':
     with app.app_context():

@@ -1,29 +1,118 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
-from datetime import datetime
+from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
+import secrets
+import hashlib
 
 db = SQLAlchemy()
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(120), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=True)
+    password_hash = db.Column(db.String(128), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='seller')  # 'admin' or 'seller'
-    is_system = db.Column(db.Boolean, default=False, comment='مستخدم النظام المخفي')  # للمستخدم الافتراضي المخفي
+    is_system = db.Column(db.Boolean, default=False, comment='مستخدم النظام المخفي')
+    
+    # Security enhancements
+    is_active = db.Column(db.Boolean, default=True)
+    is_verified = db.Column(db.Boolean, default=False)
+    failed_login_attempts = db.Column(db.Integer, default=0)
+    account_locked_until = db.Column(db.DateTime, nullable=True)
+    last_login = db.Column(db.DateTime, nullable=True)
+    last_password_change = db.Column(db.DateTime, default=datetime.utcnow)
+    password_reset_token = db.Column(db.String(100), nullable=True)
+    password_reset_expires = db.Column(db.DateTime, nullable=True)
+    
+    # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     sales = db.relationship('Sale', backref='user', lazy=True)
     
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        """Set password with enhanced security"""
+        self.password_hash = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
+        self.last_password_change = datetime.utcnow()
     
     def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        """Check password with account lockout protection"""
+        if self.is_account_locked():
+            return False
+        
+        is_valid = check_password_hash(self.password_hash, password)
+        
+        if is_valid:
+            self.failed_login_attempts = 0
+            self.last_login = datetime.utcnow()
+            db.session.commit()
+        else:
+            self.failed_login_attempts += 1
+            if self.failed_login_attempts >= 5:
+                self.account_locked_until = datetime.utcnow() + timedelta(minutes=30)
+            db.session.commit()
+        
+        return is_valid
+    
+    def is_account_locked(self):
+        """Check if account is currently locked"""
+        if self.account_locked_until and datetime.utcnow() < self.account_locked_until:
+            return True
+        elif self.account_locked_until and datetime.utcnow() >= self.account_locked_until:
+            # Unlock account
+            self.account_locked_until = None
+            self.failed_login_attempts = 0
+            db.session.commit()
+        return False
+    
+    def unlock_account(self):
+        """Manually unlock account (admin function)"""
+        self.account_locked_until = None
+        self.failed_login_attempts = 0
+        db.session.commit()
+    
+    def generate_password_reset_token(self):
+        """Generate secure password reset token"""
+        token = secrets.token_urlsafe(32)
+        self.password_reset_token = hashlib.sha256(token.encode()).hexdigest()
+        self.password_reset_expires = datetime.utcnow() + timedelta(hours=1)
+        db.session.commit()
+        return token
+    
+    def verify_password_reset_token(self, token):
+        """Verify password reset token"""
+        if not self.password_reset_token or not self.password_reset_expires:
+            return False
+        
+        if datetime.utcnow() > self.password_reset_expires:
+            return False
+        
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        return token_hash == self.password_reset_token
+    
+    def reset_password(self, new_password):
+        """Reset password and clear reset token"""
+        self.set_password(new_password)
+        self.password_reset_token = None
+        self.password_reset_expires = None
+        self.failed_login_attempts = 0
+        self.account_locked_until = None
+        db.session.commit()
     
     def is_admin(self):
         return self.role == 'admin'
+    
+    def is_password_expired(self, days=90):
+        """Check if password has expired (default 90 days)"""
+        if not self.last_password_change:
+            return True
+        return datetime.utcnow() > self.last_password_change + timedelta(days=days)
+    
+    def get_id(self):
+        """Override get_id for Flask-Login"""
+        return str(self.id)
 
 class Category(db.Model):
     id = db.Column(db.Integer, primary_key=True)
