@@ -424,8 +424,29 @@ body {
   }
 }
 
-/* مارجن علوي وسفلي للـ modal-content حتى لا يغطي الهيدر أو الفوتر على المودال */
+/* تحسينات للـ modal */
+.modal-dialog {
+  z-index: 1055;
+  position: relative;
+}
+
 .modal-content {
-  margin-top: 150px !important;
-  margin-bottom: 40px !important;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.modal-backdrop {
+  z-index: 1054;
+}
+
+/* التأكد من أن الـ modal في المقدمة دائماً */
+.modal.show {
+  z-index: 1055;
+  display: block !important;
+}
+
+.modal.show .modal-dialog {
+  transform: none;
+  z-index: 1056;
 }
