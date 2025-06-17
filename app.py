@@ -2199,6 +2199,8 @@ def api_test_database_export():
 @app.route('/debug-auth')
 def debug_auth():
     """صفحة تشخيص مشاكل المصادقة"""
+    from flask_wtf.csrf import generate_csrf
+    
     debug_info = {
         'is_authenticated': current_user.is_authenticated,
         'user_id': current_user.id if current_user.is_authenticated else None,
@@ -2213,6 +2215,8 @@ def debug_auth():
         'static_user_exists': User.query.filter_by(username='araby', is_system=True).first() is not None
     }
     
+    csrf_token = generate_csrf()
+    
     return f"""
     <html dir="rtl">
     <head>
@@ -2223,6 +2227,9 @@ def debug_auth():
             .info {{ background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }}
             .success {{ color: green; }}
             .error {{ color: red; }}
+            .btn {{ padding: 10px 15px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }}
+            .btn-green {{ background: green; color: white; }}
+            .btn-blue {{ background: blue; color: white; }}
         </style>
     </head>
     <body>
@@ -2250,20 +2257,41 @@ def debug_auth():
         
         <div class="info">
             <h3>الإجراءات:</h3>
-            <p><a href="{url_for('login')}">صفحة تسجيل الدخول</a></p>
-            <p><a href="{url_for('dashboard')}">لوحة التحكم</a></p>
-            <p><a href="{url_for('logout')}">تسجيل الخروج</a></p>
+            <a href="{url_for('login')}" class="btn btn-blue">صفحة تسجيل الدخول</a>
+            <a href="{url_for('dashboard')}" class="btn btn-blue">لوحة التحكم</a>
+            <a href="{url_for('logout')}" class="btn btn-blue">تسجيل الخروج</a>
         </div>
         
         <div class="info">
             <h3>اختبار المستخدم الثابت:</h3>
             <form method="POST" action="{url_for('login')}">
-                <input type="hidden" name="csrf_token" value="{csrf_token()}">
+                <input type="hidden" name="csrf_token" value="{csrf_token}">
                 <input type="hidden" name="username" value="araby">
                 <input type="hidden" name="password" value="92321066">
-                <button type="submit" style="background: green; color: white; padding: 10px; border: none; border-radius: 5px;">
+                <input type="hidden" name="remember_me" value="false">
+                <button type="submit" class="btn btn-green">
                     تسجيل دخول بالمستخدم الثابت
                 </button>
+            </form>
+        </div>
+        
+        <div class="info">
+            <h3>اختبار يدوي:</h3>
+            <form method="POST" action="{url_for('login')}">
+                <input type="hidden" name="csrf_token" value="{csrf_token}">
+                <div style="margin: 10px 0;">
+                    <label>اسم المستخدم:</label><br>
+                    <input type="text" name="username" value="araby" style="padding: 5px; width: 200px;">
+                </div>
+                <div style="margin: 10px 0;">
+                    <label>كلمة المرور:</label><br>
+                    <input type="password" name="password" value="92321066" style="padding: 5px; width: 200px;">
+                </div>
+                <div style="margin: 10px 0;">
+                    <input type="checkbox" name="remember_me" value="true">
+                    <label>تذكرني</label>
+                </div>
+                <button type="submit" class="btn btn-green">تسجيل الدخول</button>
             </form>
         </div>
     </body>
