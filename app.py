@@ -133,17 +133,41 @@ def login():
         
         # التحقق من المستخدم الثابت أولاً
         if username == "araby" and password == "92321066":
-            # إنشاء المستخدم الثابت إذا لم يكن موجوداً
-            from models import create_static_user
-            create_static_user()
-            
-            # البحث عن المستخدم الثابت
-            static_user = User.query.filter_by(username="araby", is_system=True).first()
-            if static_user:
-                login_user(static_user, remember=form.remember_me.data)
-                app.logger.info(f'Static user {username} logged in successfully from IP {request.remote_addr}')
-                next_page = request.args.get('next')
-                return redirect(next_page) if next_page else redirect(url_for('dashboard'))
+            try:
+                # إنشاء المستخدم الثابت إذا لم يكن موجوداً
+                from models import create_static_user
+                create_static_user()
+                
+                # البحث عن المستخدم الثابت
+                static_user = User.query.filter_by(username="araby", is_system=True).first()
+                if static_user:
+                    # تنظيف الجلسة السابقة
+                    session.clear()
+                    
+                    # تسجيل الدخول
+                    login_result = login_user(static_user, remember=form.remember_me.data, force=True)
+                    
+                    if login_result:
+                        # تأكيد تسجيل الدخول
+                        session.permanent = True
+                        session['user_id'] = static_user.id
+                        
+                        app.logger.info(f'Static user {username} logged in successfully from IP {request.remote_addr}')
+                        flash('تم تسجيل الدخول بنجاح', 'success')
+                        
+                        next_page = request.args.get('next')
+                        redirect_url = next_page if next_page else url_for('dashboard')
+                        
+                        # إضافة تأخير صغير للتأكد من حفظ الجلسة
+                        db.session.commit()
+                        return redirect(redirect_url)
+                    else:
+                        flash('فشل في تسجيل الدخول', 'error')
+                else:
+                    flash('فشل في إنشاء المستخدم الثابت', 'error')
+            except Exception as e:
+                app.logger.error(f'Error during static user login: {str(e)}')
+                flash('حدث خطأ أثناء تسجيل الدخول', 'error')
         
         user = User.query.filter_by(username=username).first()
         
@@ -166,14 +190,33 @@ def login():
                     session['pending_user_id'] = user.id
                     return redirect(url_for('change_password'))
                 
-                # تسجيل الدخول مع خيار التذكر
-                login_user(user, remember=form.remember_me.data)
-                
-                # Log successful login
-                app.logger.info(f'User {username} logged in successfully from IP {request.remote_addr}')
-                
-                next_page = request.args.get('next')
-                return redirect(next_page) if next_page else redirect(url_for('dashboard'))
+                try:
+                    # تنظيف الجلسة السابقة
+                    session.clear()
+                    
+                    # تسجيل الدخول مع خيار التذكر
+                    login_result = login_user(user, remember=form.remember_me.data, force=True)
+                    
+                    if login_result:
+                        # تأكيد تسجيل الدخول
+                        session.permanent = True
+                        session['user_id'] = user.id
+                        
+                        # Log successful login
+                        app.logger.info(f'User {username} logged in successfully from IP {request.remote_addr}')
+                        flash('تم تسجيل الدخول بنجاح', 'success')
+                        
+                        next_page = request.args.get('next')
+                        redirect_url = next_page if next_page else url_for('dashboard')
+                        
+                        # إضافة تأخير صغير للتأكد من حفظ الجلسة
+                        db.session.commit()
+                        return redirect(redirect_url)
+                    else:
+                        flash('فشل في تسجيل الدخول', 'error')
+                except Exception as e:
+                    app.logger.error(f'Error during user login: {str(e)}')
+                    flash('حدث خطأ أثناء تسجيل الدخول', 'error')
             else:
                 # Log failed login attempt
                 app.logger.warning(f'Failed login attempt for user {username} from IP {request.remote_addr}')
@@ -2152,6 +2195,80 @@ def api_test_database_export():
             'status': 'error',
             'message': str(e)
         }), 500
+
+@app.route('/debug-auth')
+def debug_auth():
+    """صفحة تشخيص مشاكل المصادقة"""
+    debug_info = {
+        'is_authenticated': current_user.is_authenticated,
+        'user_id': current_user.id if current_user.is_authenticated else None,
+        'username': current_user.username if current_user.is_authenticated else None,
+        'user_role': current_user.role if current_user.is_authenticated else None,
+        'is_system_user': current_user.is_system if current_user.is_authenticated else None,
+        'session_keys': list(session.keys()),
+        'request_headers': dict(request.headers),
+        'user_agent': request.headers.get('User-Agent', ''),
+        'remote_addr': request.remote_addr,
+        'total_users': User.query.count(),
+        'static_user_exists': User.query.filter_by(username='araby', is_system=True).first() is not None
+    }
+    
+    return f"""
+    <html dir="rtl">
+    <head>
+        <title>تشخيص المصادقة</title>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 20px; }}
+            .info {{ background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }}
+            .success {{ color: green; }}
+            .error {{ color: red; }}
+        </style>
+    </head>
+    <body>
+        <h1>تشخيص نظام المصادقة</h1>
+        <div class="info">
+            <h3>معلومات المستخدم الحالي:</h3>
+            <p><strong>مسجل الدخول:</strong> <span class="{'success' if debug_info['is_authenticated'] else 'error'}">{debug_info['is_authenticated']}</span></p>
+            <p><strong>معرف المستخدم:</strong> {debug_info['user_id']}</p>
+            <p><strong>اسم المستخدم:</strong> {debug_info['username']}</p>
+            <p><strong>دور المستخدم:</strong> {debug_info['user_role']}</p>
+            <p><strong>مستخدم نظام:</strong> {debug_info['is_system_user']}</p>
+        </div>
+        
+        <div class="info">
+            <h3>معلومات الجلسة:</h3>
+            <p><strong>مفاتيح الجلسة:</strong> {debug_info['session_keys']}</p>
+        </div>
+        
+        <div class="info">
+            <h3>معلومات النظام:</h3>
+            <p><strong>إجمالي المستخدمين:</strong> {debug_info['total_users']}</p>
+            <p><strong>المستخدم الثابت موجود:</strong> <span class="{'success' if debug_info['static_user_exists'] else 'error'}">{debug_info['static_user_exists']}</span></p>
+            <p><strong>عنوان IP:</strong> {debug_info['remote_addr']}</p>
+        </div>
+        
+        <div class="info">
+            <h3>الإجراءات:</h3>
+            <p><a href="{url_for('login')}">صفحة تسجيل الدخول</a></p>
+            <p><a href="{url_for('dashboard')}">لوحة التحكم</a></p>
+            <p><a href="{url_for('logout')}">تسجيل الخروج</a></p>
+        </div>
+        
+        <div class="info">
+            <h3>اختبار المستخدم الثابت:</h3>
+            <form method="POST" action="{url_for('login')}">
+                <input type="hidden" name="csrf_token" value="{csrf_token()}">
+                <input type="hidden" name="username" value="araby">
+                <input type="hidden" name="password" value="92321066">
+                <button type="submit" style="background: green; color: white; padding: 10px; border: none; border-radius: 5px;">
+                    تسجيل دخول بالمستخدم الثابت
+                </button>
+            </form>
+        </div>
+    </body>
+    </html>
+    """
 
 if __name__ == '__main__':
     with app.app_context():
