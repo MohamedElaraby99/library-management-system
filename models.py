@@ -34,27 +34,49 @@ class User(UserMixin, db.Model):
     
     def set_password(self, password):
         """Set password with enhanced security"""
+        if isinstance(password, str):
+            password = password.encode('utf-8') if isinstance(password, str) else password
         self.password_hash = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
         self.last_password_change = datetime.utcnow()
     
     def check_password(self, password):
         """Check password with account lockout protection"""
-        if self.is_account_locked():
+        try:
+            if self.is_account_locked():
+                return False
+            
+            # تنظيف كلمة المرور من المسافات والأحرف الخاصة
+            if password:
+                password = str(password).strip()
+                
+            # التحقق من وجود password_hash
+            if not self.password_hash:
+                return False
+            
+            is_valid = check_password_hash(self.password_hash, password)
+            
+            if is_valid:
+                self.failed_login_attempts = 0
+                self.last_login = datetime.utcnow()
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+            else:
+                self.failed_login_attempts += 1
+                if self.failed_login_attempts >= 5:
+                    self.account_locked_until = datetime.utcnow() + timedelta(minutes=30)
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+            
+            return is_valid
+            
+        except Exception as e:
+            # تسجيل الخطأ وإرجاع False
+            print(f"Error checking password for user {self.username}: {str(e)}")
             return False
-        
-        is_valid = check_password_hash(self.password_hash, password)
-        
-        if is_valid:
-            self.failed_login_attempts = 0
-            self.last_login = datetime.utcnow()
-            db.session.commit()
-        else:
-            self.failed_login_attempts += 1
-            if self.failed_login_attempts >= 5:
-                self.account_locked_until = datetime.utcnow() + timedelta(minutes=30)
-            db.session.commit()
-        
-        return is_valid
     
     def is_account_locked(self):
         """Check if account is currently locked"""

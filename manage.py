@@ -265,5 +265,88 @@ def check_health():
                 click.echo(f"⚠️  Environment variable '{var}': Not set")
 
 
+@cli.command()
+@click.option('--username', prompt='Username', help='Username to check password for')
+@click.option('--password', prompt='Password', hide_input=True, help='Password to test')
+def test_password(username, password):
+    """Test password verification for debugging"""
+    with app.app_context():
+        user = User.query.filter_by(username=username).first()
+        if not user:
+            click.echo(f"❌ User '{username}' not found!")
+            return
+        
+        click.echo(f"🔍 Testing password for user: {username}")
+        click.echo(f"📋 User details:")
+        click.echo(f"   - ID: {user.id}")
+        click.echo(f"   - Username: {user.username}")
+        click.echo(f"   - Role: {user.role}")
+        click.echo(f"   - Active: {user.is_active}")
+        click.echo(f"   - System: {user.is_system}")
+        click.echo(f"   - Password Hash Length: {len(user.password_hash) if user.password_hash else 0}")
+        click.echo(f"   - Account Locked: {user.is_account_locked()}")
+        click.echo(f"   - Failed Attempts: {user.failed_login_attempts}")
+        
+        # Test password
+        try:
+            result = user.check_password(password)
+            if result:
+                click.echo("✅ Password verification: SUCCESS")
+            else:
+                click.echo("❌ Password verification: FAILED")
+        except Exception as e:
+            click.echo(f"❌ Error during password check: {str(e)}")
+
+
+@cli.command()
+@click.option('--username', prompt='Username', help='Username to fix password for')
+@click.option('--password', prompt='New password', hide_input=True, help='New password to set')
+def fix_password(username, password):
+    """Fix user password (useful for production issues)"""
+    with app.app_context():
+        user = User.query.filter_by(username=username).first()
+        if not user:
+            click.echo(f"❌ User '{username}' not found!")
+            return
+        
+        try:
+            # Reset failed attempts and unlock account
+            user.failed_login_attempts = 0
+            user.account_locked_until = None
+            
+            # Set new password
+            user.set_password(password)
+            db.session.commit()
+            
+            click.echo(f"✅ Password updated successfully for user '{username}'!")
+            click.echo("🔓 Account unlocked and login attempts reset.")
+            
+        except Exception as e:
+            db.session.rollback()
+            click.echo(f"❌ Error updating password: {str(e)}")
+
+
+@cli.command()
+def check_db_encoding():
+    """Check database encoding and character set issues"""
+    with app.app_context():
+        click.echo("🔍 Checking database encoding...")
+        
+        users = User.query.all()
+        for user in users:
+            click.echo(f"\n👤 User: {user.username}")
+            click.echo(f"   - Username type: {type(user.username)}")
+            click.echo(f"   - Username repr: {repr(user.username)}")
+            click.echo(f"   - Password hash type: {type(user.password_hash)}")
+            click.echo(f"   - Password hash length: {len(user.password_hash) if user.password_hash else 0}")
+            
+            # Test encoding
+            try:
+                username_encoded = user.username.encode('utf-8')
+                click.echo(f"   - UTF-8 encoding: OK")
+            except Exception as e:
+                click.echo(f"   - UTF-8 encoding error: {str(e)}")
+
+
 if __name__ == '__main__':
     cli() 

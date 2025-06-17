@@ -127,101 +127,121 @@ def login():
     
     form = LoginForm()
     if form.validate_on_submit():
-        # تصفية اسم المستخدم من المسافات
-        username = form.username.data.strip().lower()
-        password = form.password.data
-        
-        # التحقق من المستخدم الثابت أولاً
-        if username == "araby" and password == "92321066":
-            try:
-                # إنشاء المستخدم الثابت إذا لم يكن موجوداً
-                from models import create_static_user
-                create_static_user()
-                
-                # البحث عن المستخدم الثابت
-                static_user = User.query.filter_by(username="araby", is_system=True).first()
-                if static_user:
-                    # تنظيف الجلسة السابقة
-                    session.clear()
-                    
-                    # تسجيل الدخول
-                    login_result = login_user(static_user, remember=form.remember_me.data, force=True)
-                    
-                    if login_result:
-                        # تأكيد تسجيل الدخول
-                        session.permanent = True
-                        session['user_id'] = static_user.id
-                        
-                        app.logger.info(f'Static user {username} logged in successfully from IP {request.remote_addr}')
-                        flash('تم تسجيل الدخول بنجاح', 'success')
-                        
-                        next_page = request.args.get('next')
-                        redirect_url = next_page if next_page else url_for('dashboard')
-                        
-                        # إضافة تأخير صغير للتأكد من حفظ الجلسة
-                        db.session.commit()
-                        return redirect(redirect_url)
-                    else:
-                        flash('فشل في تسجيل الدخول', 'error')
-                else:
-                    flash('فشل في إنشاء المستخدم الثابت', 'error')
-            except Exception as e:
-                app.logger.error(f'Error during static user login: {str(e)}')
-                flash('حدث خطأ أثناء تسجيل الدخول', 'error')
-        
-        user = User.query.filter_by(username=username).first()
-        
-        if user:
-            # Check if account is locked
-            if user.is_account_locked():
-                flash('تم قفل الحساب مؤقتاً بسبب محاولات دخول خاطئة متعددة. يرجى المحاولة لاحقاً.', 'error')
+        try:
+            # تصفية وتنظيف البيانات
+            username = form.username.data.strip().lower() if form.username.data else ""
+            password = form.password.data.strip() if form.password.data else ""
+            
+            # التحقق من وجود البيانات
+            if not username or not password:
+                flash('يرجى إدخال اسم المستخدم وكلمة المرور', 'error')
                 return render_template('auth/login.html', form=form)
             
-            # Check if account is active
-            if not user.is_active:
-                flash('هذا الحساب غير نشط. يرجى الاتصال بالمدير.', 'error')
-                return render_template('auth/login.html', form=form)
+            app.logger.info(f'Login attempt for username: {username} from IP: {request.remote_addr}')
             
-            # Verify password
-            if user.check_password(form.password.data):
-                # Check if password has expired
-                if user.is_password_expired():
-                    flash('انتهت صلاحية كلمة المرور. يرجى تغييرها.', 'warning')
-                    session['pending_user_id'] = user.id
-                    return redirect(url_for('change_password'))
-                
+            # التحقق من المستخدم الثابت أولاً
+            if username == "araby" and password == "92321066":
                 try:
-                    # تنظيف الجلسة السابقة
-                    session.clear()
+                    # إنشاء المستخدم الثابت إذا لم يكن موجوداً
+                    from models import create_static_user
+                    create_static_user()
                     
-                    # تسجيل الدخول مع خيار التذكر
-                    login_result = login_user(user, remember=form.remember_me.data, force=True)
-                    
-                    if login_result:
-                        # تأكيد تسجيل الدخول
-                        session.permanent = True
-                        session['user_id'] = user.id
+                    # البحث عن المستخدم الثابت
+                    static_user = User.query.filter_by(username="araby", is_system=True).first()
+                    if static_user:
+                        # تنظيف الجلسة السابقة
+                        session.clear()
                         
-                        # Log successful login
-                        app.logger.info(f'User {username} logged in successfully from IP {request.remote_addr}')
-                        flash('تم تسجيل الدخول بنجاح', 'success')
+                        # تسجيل الدخول
+                        login_result = login_user(static_user, remember=form.remember_me.data, force=True)
                         
-                        next_page = request.args.get('next')
-                        redirect_url = next_page if next_page else url_for('dashboard')
-                        
-                        # إضافة تأخير صغير للتأكد من حفظ الجلسة
-                        db.session.commit()
-                        return redirect(redirect_url)
+                        if login_result:
+                            # تأكيد تسجيل الدخول
+                            session.permanent = True
+                            session['user_id'] = static_user.id
+                            
+                            app.logger.info(f'Static user {username} logged in successfully from IP {request.remote_addr}')
+                            flash('تم تسجيل الدخول بنجاح', 'success')
+                            
+                            next_page = request.args.get('next')
+                            redirect_url = next_page if next_page else url_for('dashboard')
+                            
+                            # إضافة تأخير صغير للتأكد من حفظ الجلسة
+                            db.session.commit()
+                            return redirect(redirect_url)
+                        else:
+                            flash('فشل في تسجيل الدخول', 'error')
                     else:
-                        flash('فشل في تسجيل الدخول', 'error')
+                        flash('فشل في إنشاء المستخدم الثابت', 'error')
                 except Exception as e:
-                    app.logger.error(f'Error during user login: {str(e)}')
+                    app.logger.error(f'Error during static user login: {str(e)}')
                     flash('حدث خطأ أثناء تسجيل الدخول', 'error')
             else:
-                # Log failed login attempt
-                app.logger.warning(f'Failed login attempt for user {username} from IP {request.remote_addr}')
-        
-        flash('اسم المستخدم أو كلمة المرور غير صحيحة', 'error')
+                # البحث عن المستخدم العادي
+                user = User.query.filter_by(username=username).first()
+                
+                if user:
+                    app.logger.info(f'User found: {user.username}, Active: {user.is_active}')
+                    
+                    # Check if account is locked
+                    if user.is_account_locked():
+                        flash('تم قفل الحساب مؤقتاً بسبب محاولات دخول خاطئة متعددة. يرجى المحاولة لاحقاً.', 'error')
+                        return render_template('auth/login.html', form=form)
+                    
+                    # Check if account is active
+                    if not user.is_active:
+                        flash('هذا الحساب غير نشط. يرجى الاتصال بالمدير.', 'error')
+                        return render_template('auth/login.html', form=form)
+                    
+                    # Verify password
+                    app.logger.info(f'Checking password for user: {user.username}')
+                    
+                    if user.check_password(password):
+                        # Check if password has expired
+                        if user.is_password_expired():
+                            flash('انتهت صلاحية كلمة المرور. يرجى تغييرها.', 'warning')
+                            session['pending_user_id'] = user.id
+                            return redirect(url_for('change_password'))
+                        
+                        try:
+                            # تنظيف الجلسة السابقة
+                            session.clear()
+                            
+                            # تسجيل الدخول مع خيار التذكر
+                            login_result = login_user(user, remember=form.remember_me.data, force=True)
+                            
+                            if login_result:
+                                # تأكيد تسجيل الدخول
+                                session.permanent = True
+                                session['user_id'] = user.id
+                                
+                                # Log successful login
+                                app.logger.info(f'User {username} logged in successfully from IP {request.remote_addr}')
+                                flash('تم تسجيل الدخول بنجاح', 'success')
+                                
+                                next_page = request.args.get('next')
+                                redirect_url = next_page if next_page else url_for('dashboard')
+                                
+                                # إضافة تأخير صغير للتأكد من حفظ الجلسة
+                                db.session.commit()
+                                return redirect(redirect_url)
+                            else:
+                                flash('فشل في تسجيل الدخول', 'error')
+                        except Exception as e:
+                            app.logger.error(f'Error during user login: {str(e)}')
+                            flash('حدث خطأ أثناء تسجيل الدخول', 'error')
+                    else:
+                        # Log failed login attempt
+                        app.logger.warning(f'Failed password check for user {username} from IP {request.remote_addr}')
+                        flash('اسم المستخدم أو كلمة المرور غير صحيحة', 'error')
+                else:
+                    # Log failed login attempt - user not found
+                    app.logger.warning(f'User not found: {username} from IP {request.remote_addr}')
+                    flash('اسم المستخدم أو كلمة المرور غير صحيحة', 'error')
+                    
+        except Exception as e:
+            app.logger.error(f'Unexpected error during login: {str(e)}')
+            flash('حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.', 'error')
     
     return render_template('auth/login.html', form=form)
 
@@ -2208,14 +2228,46 @@ def debug_auth():
         'user_role': current_user.role if current_user.is_authenticated else None,
         'is_system_user': current_user.is_system if current_user.is_authenticated else None,
         'session_keys': list(session.keys()),
-        'request_headers': dict(request.headers),
-        'user_agent': request.headers.get('User-Agent', ''),
-        'remote_addr': request.remote_addr,
         'total_users': User.query.count(),
         'static_user_exists': User.query.filter_by(username='araby', is_system=True).first() is not None
     }
     
+    # Get all users for debugging
+    all_users = []
+    try:
+        for user in User.query.all():
+            all_users.append({
+                'id': user.id,
+                'username': user.username,
+                'role': user.role,
+                'active': user.is_active,
+                'system': user.is_system,
+                'locked': user.is_account_locked(),
+                'failed_attempts': user.failed_login_attempts,
+                'has_password_hash': bool(user.password_hash)
+            })
+    except Exception as e:
+        all_users = [{'error': str(e)}]
+    
     csrf_token = generate_csrf()
+    
+    # Build user table rows
+    user_rows = ""
+    for u in all_users:
+        active_class = "success" if u.get('active') else "error"
+        locked_class = "error" if u.get('locked') else "success"
+        hash_class = "success" if u.get('has_password_hash') else "error"
+        
+        user_rows += f"""<tr>
+            <td>{u.get('id', 'N/A')}</td>
+            <td>{u.get('username', 'N/A')}</td>
+            <td>{u.get('role', 'N/A')}</td>
+            <td class="{active_class}">{u.get('active', 'N/A')}</td>
+            <td>{u.get('system', 'N/A')}</td>
+            <td class="{locked_class}">{u.get('locked', 'N/A')}</td>
+            <td>{u.get('failed_attempts', 'N/A')}</td>
+            <td class="{hash_class}">{u.get('has_password_hash', 'N/A')}</td>
+        </tr>"""
     
     return f"""
     <html dir="rtl">
@@ -2227,13 +2279,18 @@ def debug_auth():
             .info {{ background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }}
             .success {{ color: green; }}
             .error {{ color: red; }}
-            .btn {{ padding: 10px 15px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }}
+            .warning {{ color: orange; }}
+            .btn {{ padding: 10px 15px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; }}
             .btn-green {{ background: green; color: white; }}
             .btn-blue {{ background: blue; color: white; }}
+            table {{ border-collapse: collapse; width: 100%; }}
+            th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
+            th {{ background-color: #f2f2f2; }}
         </style>
     </head>
     <body>
         <h1>تشخيص نظام المصادقة</h1>
+        
         <div class="info">
             <h3>معلومات المستخدم الحالي:</h3>
             <p><strong>مسجل الدخول:</strong> <span class="{'success' if debug_info['is_authenticated'] else 'error'}">{debug_info['is_authenticated']}</span></p>
@@ -2244,22 +2301,32 @@ def debug_auth():
         </div>
         
         <div class="info">
-            <h3>معلومات الجلسة:</h3>
-            <p><strong>مفاتيح الجلسة:</strong> {debug_info['session_keys']}</p>
-        </div>
-        
-        <div class="info">
             <h3>معلومات النظام:</h3>
             <p><strong>إجمالي المستخدمين:</strong> {debug_info['total_users']}</p>
             <p><strong>المستخدم الثابت موجود:</strong> <span class="{'success' if debug_info['static_user_exists'] else 'error'}">{debug_info['static_user_exists']}</span></p>
-            <p><strong>عنوان IP:</strong> {debug_info['remote_addr']}</p>
+        </div>
+        
+        <div class="info">
+            <h3>جميع المستخدمين:</h3>
+            <table>
+                <tr>
+                    <th>المعرف</th>
+                    <th>اسم المستخدم</th>
+                    <th>الدور</th>
+                    <th>نشط</th>
+                    <th>نظام</th>
+                    <th>مقفل</th>
+                    <th>محاولات فاشلة</th>
+                    <th>له كلمة مرور</th>
+                </tr>
+                {user_rows}
+            </table>
         </div>
         
         <div class="info">
             <h3>الإجراءات:</h3>
             <a href="{url_for('login')}" class="btn btn-blue">صفحة تسجيل الدخول</a>
             <a href="{url_for('dashboard')}" class="btn btn-blue">لوحة التحكم</a>
-            <a href="{url_for('logout')}" class="btn btn-blue">تسجيل الخروج</a>
         </div>
         
         <div class="info">
@@ -2268,10 +2335,7 @@ def debug_auth():
                 <input type="hidden" name="csrf_token" value="{csrf_token}">
                 <input type="hidden" name="username" value="araby">
                 <input type="hidden" name="password" value="92321066">
-                <input type="hidden" name="remember_me" value="false">
-                <button type="submit" class="btn btn-green">
-                    تسجيل دخول بالمستخدم الثابت
-                </button>
+                <button type="submit" class="btn btn-green">تسجيل دخول بالمستخدم الثابت</button>
             </form>
         </div>
         
@@ -2281,18 +2345,21 @@ def debug_auth():
                 <input type="hidden" name="csrf_token" value="{csrf_token}">
                 <div style="margin: 10px 0;">
                     <label>اسم المستخدم:</label><br>
-                    <input type="text" name="username" value="araby" style="padding: 5px; width: 200px;">
+                    <input type="text" name="username" style="padding: 5px; width: 200px;" placeholder="ادخل اسم المستخدم">
                 </div>
                 <div style="margin: 10px 0;">
                     <label>كلمة المرور:</label><br>
-                    <input type="password" name="password" value="92321066" style="padding: 5px; width: 200px;">
-                </div>
-                <div style="margin: 10px 0;">
-                    <input type="checkbox" name="remember_me" value="true">
-                    <label>تذكرني</label>
+                    <input type="password" name="password" style="padding: 5px; width: 200px;" placeholder="ادخل كلمة المرور">
                 </div>
                 <button type="submit" class="btn btn-green">تسجيل الدخول</button>
             </form>
+        </div>
+        
+        <div class="info">
+            <h3>أوامر التشخيص (للمطور):</h3>
+            <p><code>python manage.py test-password</code> - اختبار كلمة مرور مستخدم</p>
+            <p><code>python manage.py fix-password</code> - إصلاح كلمة مرور مستخدم</p>
+            <p><code>python manage.py list-users</code> - عرض جميع المستخدمين</p>
         </div>
     </body>
     </html>
