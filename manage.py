@@ -96,14 +96,26 @@ def list_users():
         
         click.echo("\n📋 User List:")
         click.echo("-" * 80)
-        click.echo(f"{'Username':<20} {'Role':<10} {'Active':<8} {'Locked':<8} {'Last Login':<20}")
+        click.echo(f"{'Username':<20} {'Role':<10} {'Active':<8} {'Locked':<8} {'System':<8} {'Last Login':<20}")
         click.echo("-" * 80)
         
         for user in users:
             is_locked = "Yes" if user.is_account_locked() else "No"
+            is_system = "Yes" if user.is_system else "No"
             last_login = user.last_login.strftime("%Y-%m-%d %H:%M") if user.last_login else "Never"
             
-            click.echo(f"{user.username:<20} {user.role:<10} {str(user.is_active):<8} {is_locked:<8} {last_login:<20}")
+            click.echo(f"{user.username:<20} {user.role:<10} {str(user.is_active):<8} {is_locked:<8} {is_system:<8} {last_login:<20}")
+
+
+@cli.command()
+def create_static_user():
+    """Create the static system user (araby)"""
+    with app.app_context():
+        from models import create_static_user
+        if create_static_user():
+            click.echo("✅ Static user 'araby' created/verified successfully!")
+        else:
+            click.echo("❌ Failed to create static user!")
 
 
 @cli.command()

