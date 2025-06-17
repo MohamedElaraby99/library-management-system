@@ -23,7 +23,7 @@ class Config:
     SESSION_COOKIE_SAMESITE = 'Lax'
     
     # Application settings
-    APP_NAME = os.environ.get('APP_NAME', 'نظام إدارة المكتبة')
+    APP_NAME = os.environ.get('APP_NAME', 'نظام إدارة مكتبة Norko')
     APP_VERSION = os.environ.get('APP_VERSION', '1.0.0')
     
     # Upload settings

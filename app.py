@@ -353,7 +353,7 @@ def send_password_reset_email(user, token):
     if not app.config.get('MAIL_USERNAME'):
         raise Exception("Email not configured")
     
-    subject = 'إعادة تعيين كلمة المرور - نظام إدارة المكتبة'
+    subject = 'إعادة تعيين كلمة المرور - نظام إدارة مكتبة Norko'
     reset_url = url_for('reset_password', token=token, _external=True)
     
     body = f"""
@@ -369,7 +369,7 @@ def send_password_reset_email(user, token):
     إذا لم تطلب إعادة تعيين كلمة المرور، يرجى تجاهل هذه الرسالة.
     
     تحياتنا،
-    فريق نظام إدارة المكتبة
+    فريق نظام إدارة مكتبة Norko
     """
     
     msg = Message(

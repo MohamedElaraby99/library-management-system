@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}التقارير - نظام إدارة المكتبة{% endblock %}
+{% block title %}التقارير - نظام إدارة مكتبة Norko{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -347,85 +347,85 @@
             })
             .then(data => {
                 const wb = XLSX.utils.book_new();
-                
+
                 // ملخص التقرير
                 if (data.report_summary && data.report_summary.length > 0) {
                     const ws = XLSX.utils.json_to_sheet(data.report_summary);
                     XLSX.utils.book_append_sheet(wb, ws, 'ملخص التقرير');
                 }
-                
+
                 // المبيعات
                 if (data.sales && data.sales.length > 0) {
                     const ws = XLSX.utils.json_to_sheet(data.sales);
                     XLSX.utils.book_append_sheet(wb, ws, 'المبيعات');
                 }
-                
+
                 // تفاصيل المبيعات (الأصناف المباعة)
                 if (data.sale_items && data.sale_items.length > 0) {
                     const ws = XLSX.utils.json_to_sheet(data.sale_items);
                     XLSX.utils.book_append_sheet(wb, ws, 'تفاصيل المبيعات');
                 }
-                
+
                 // العملاء
                 if (data.customers && data.customers.length > 0) {
                     const ws = XLSX.utils.json_to_sheet(data.customers);
                     XLSX.utils.book_append_sheet(wb, ws, 'العملاء');
                 }
-                
+
                 // الديون
                 if (data.debts && data.debts.length > 0) {
                     const ws = XLSX.utils.json_to_sheet(data.debts);
                     XLSX.utils.book_append_sheet(wb, ws, 'الديون');
                 }
-                
+
                 // المنتجات
                 if (data.products && data.products.length > 0) {
                     const ws = XLSX.utils.json_to_sheet(data.products);
                     XLSX.utils.book_append_sheet(wb, ws, 'المنتجات');
                 }
-                
+
                 // الفئات
                 if (data.categories && data.categories.length > 0) {
                     const ws = XLSX.utils.json_to_sheet(data.categories);
                     XLSX.utils.book_append_sheet(wb, ws, 'الفئات');
                 }
-                
+
                 // المدفوعات
                 if (data.payments && data.payments.length > 0) {
                     const ws = XLSX.utils.json_to_sheet(data.payments);
                     XLSX.utils.book_append_sheet(wb, ws, 'المدفوعات');
                 }
-                
+
                 // المصاريف
                 if (data.expenses && data.expenses.length > 0) {
                     const ws = XLSX.utils.json_to_sheet(data.expenses);
                     XLSX.utils.book_append_sheet(wb, ws, 'المصاريف');
                 }
-                
+
                 // المستخدمين (إذا كان متاحًا للمشرف)
                 if (data.users && data.users.length > 0) {
                     const ws = XLSX.utils.json_to_sheet(data.users);
                     XLSX.utils.book_append_sheet(wb, ws, 'المستخدمين');
                 }
-                
+
                 // إحصائيات المخزون
                 if (data.stock_summary && data.stock_summary.length > 0) {
                     const ws = XLSX.utils.json_to_sheet(data.stock_summary);
                     XLSX.utils.book_append_sheet(wb, ws, 'إحصائيات المخزون');
                 }
-                
+
                 // إنشاء اسم الملف مع التاريخ والوقت
                 const now = new Date();
-                const dateStr = now.getFullYear() + '-' + 
-                    String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                const dateStr = now.getFullYear() + '-' +
+                    String(now.getMonth() + 1).padStart(2, '0') + '-' +
                     String(now.getDate()).padStart(2, '0');
-                const timeStr = String(now.getHours()).padStart(2, '0') + '-' + 
+                const timeStr = String(now.getHours()).padStart(2, '0') + '-' +
                     String(now.getMinutes()).padStart(2, '0');
-                const fileName = `نظام_المكتبة_قاعدة_البيانات_الكاملة_${dateStr}_${timeStr}.xlsx`;
-                
+                const fileName = `نظام_مكتبة Norko_قاعدة_البيانات_الكاملة_${dateStr}_${timeStr}.xlsx`;
+
                 // تحميل الملف
                 XLSX.writeFile(wb, fileName);
-                
+
                 // إظهار رسالة نجاح
                 alert(`تم تصدير قاعدة البيانات بنجاح!\nالملف: ${fileName}\n\nتم تصدير البيانات التالية:\n` +
                     `• ملخص التقرير: ${data.report_summary ? data.report_summary.length : 0} سجل\n` +
