@@ -34,8 +34,12 @@ class User(UserMixin, db.Model):
     
     def set_password(self, password):
         """Set password with enhanced security"""
-        if isinstance(password, str):
-            password = password.encode('utf-8') if isinstance(password, str) else password
+        # Ensure password is a string
+        if isinstance(password, bytes):
+            password = password.decode('utf-8')
+        elif not isinstance(password, str):
+            password = str(password)
+        
         self.password_hash = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
         self.last_password_change = datetime.utcnow()
     
