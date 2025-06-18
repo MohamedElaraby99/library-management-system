@@ -89,7 +89,7 @@
                     {% for item in sale.sale_items %}
                     <tr>
                         <td>#{{ sale.id }}</td>
-                        <td>{{ sale.sale_date.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ sale.sale_date|egypt_date }}</td>
                         <td>{{ item.product.name_ar }}</td>
                         <td>{{ item.quantity }}</td>
                         <td>{{ "%.2f"|format(item.unit_price) }} ج.م</td>
@@ -138,7 +138,7 @@
                     {% for sale in sales %}
                     <tr>
                         <td>#{{ sale.id }}</td>
-                        <td>{{ sale.sale_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ sale.sale_date|egypt_datetime }}</td>
                         <td>{{ "%.2f"|format(sale.total_amount) }} ج.م</td>
                         <td>{{ "%.2f"|format(sale.paid_amount) }} ج.م</td>
                         <td>
@@ -242,7 +242,7 @@
                                         <tbody>
                                             {% for payment in sale.payments %}
                                             <tr>
-                                                <td>{{ payment.payment_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                                                <td>{{ payment.payment_date|egypt_datetime }}</td>
                                                 <td>{{ "%.2f"|format(payment.amount) }} ج.م</td>
                                                 <td>{{ payment.payment_method }}</td>
                                                 <td>{{ payment.notes or '-' }}</td>

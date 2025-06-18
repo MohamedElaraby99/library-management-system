@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}بيع جديد - نظام إدارة مكتبة Norko{% endblock %}
+{% block title %}بيع جديد - إدارة Norko Store{% endblock %}
 
 {% block content %}
 <script>
@@ -149,9 +149,11 @@
                                     </div>
                                 </div>
                             </div>
+                            {% if current_user.is_admin() %}
                             <button class="btn btn-outline-primary" type="button" onclick="showAddCustomerForm()">
                                 <i class="bi bi-person-plus"></i>
                             </button>
+                            {% endif %}
                         </div>
                         <div class="invalid-feedback" id="customerError" style="display: none;">
                             يجب اختيار عميل للبيع الآجل
@@ -257,7 +259,7 @@
                     <small class="product-stock"></small>
                 </p>
                 <div class="d-flex align-items-center">
-                    <input type="number" class="form-control form-control-sm me-2 quantity-input" min="0.01" step="0.01"
+                    <input type="number" class="form-control form-control-sm me-2 quantity-input" min="1" step="1"
                         value="1" style="width: 80px;">
                     <button class="btn btn-primary btn-sm add-to-cart" onclick="addToCart(this)">
                         <i class="bi bi-plus"></i>
@@ -291,7 +293,7 @@
                     <i class="bi bi-dash"></i>
                 </button>
                 <input type="number" class="form-control form-control-sm text-center mx-1 item-quantity-input"
-                    style="width: 60px;" min="0.01" step="0.01" onchange="updateItemQuantity(this)">
+                    style="width: 60px;" min="1" step="1" onchange="updateItemQuantity(this)">
                 <button class="btn btn-sm btn-outline-secondary ms-1" onclick="increaseQuantity(this)"
                     title="زيادة الكمية">
                     <i class="bi bi-plus"></i>
@@ -401,15 +403,15 @@
         const productId = parseInt(button.dataset.productId);
         const product = products.find(p => p.id === productId);
         const quantityInput = button.parentElement.querySelector('.quantity-input');
-        const quantity = parseFloat(quantityInput.value);
+        const quantity = parseInt(quantityInput.value);
 
         if (!product) {
             alert('المنتج غير موجود');
             return;
         }
 
-        if (quantity <= 0) {
-            alert('يجب أن تكون الكمية أكبر من صفر');
+        if (quantity < 1) {
+            alert('يجب أن تكون الكمية 1 على الأقل');
             return;
         }
 
@@ -611,7 +613,7 @@
 
         if (!product) return;
 
-        const newQuantity = cartItems[index].quantity + (product.unit_type === 'جزئي' ? 1 : 0.01);
+        const newQuantity = cartItems[index].quantity + 1;
 
         if (newQuantity <= product.stock) {
             cartItems[index].quantity = newQuantity;
@@ -630,9 +632,9 @@
 
         if (!product) return;
 
-        const newQuantity = cartItems[index].quantity - (product.unit_type === 'جزئي' ? 1 : 0.01);
+        const newQuantity = cartItems[index].quantity - 1;
 
-        if (newQuantity > 0) {
+        if (newQuantity >= 1) {
             cartItems[index].quantity = newQuantity;
             cartItems[index].total_price = cartItems[index].quantity * cartItems[index].unit_price;
             updateCart();
@@ -647,12 +649,12 @@
         const index = parseInt(input.dataset.index);
         const productId = parseInt(input.dataset.productId);
         const product = products.find(p => p.id === productId);
-        const newQuantity = parseFloat(input.value);
+        const newQuantity = parseInt(input.value);
 
         if (!product) return;
 
-        if (newQuantity <= 0) {
-            // احذف المنتج إذا كانت الكمية صفر أو أقل
+        if (newQuantity < 1) {
+            // احذف المنتج إذا كانت الكمية أقل من 1
             cartItems.splice(index, 1);
             updateCart();
             return;

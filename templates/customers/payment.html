@@ -17,7 +17,7 @@
                         <div class="col-md-6">
                             <p class="mb-1"><strong>العميل:</strong> {{ customer.name }}</p>
                             <p class="mb-1"><strong>رقم البيع:</strong> #{{ sale.id }}</p>
-                            <p class="mb-0"><strong>تاريخ البيع:</strong> {{ sale.sale_date.strftime('%Y-%m-%d %H:%M')
+                            <p class="mb-0"><strong>تاريخ البيع:</strong> {{ sale.sale_date|egypt_datetime }}
                                 }}</p>
                         </div>
                         <div class="col-md-6">
@@ -134,7 +134,7 @@
                         <tbody>
                             {% for payment in sale.payments %}
                             <tr>
-                                <td>{{ payment.payment_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>{{ payment.payment_date|egypt_datetime }}</td>
                                 <td>{{ "%.2f"|format(payment.amount) }} ج.م</td>
                                 <td>{{ payment.payment_method }}</td>
                                 <td>{{ payment.notes or '-' }}</td>

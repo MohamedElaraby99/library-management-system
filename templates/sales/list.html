@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}المبيعات - نظام إدارة مكتبة Norko{% endblock %}
+{% block title %}المبيعات - إدارة Norko Store{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -56,8 +56,8 @@
                                 <strong class="text-primary">#{{ sale.id }}</strong>
                             </td>
                             <td>
-                                {{ sale.sale_date.strftime('%d/%m/%Y') }}<br>
-                                <small class="text-muted">{{ sale.sale_date.strftime('%H:%M') }}</small>
+                                {{ sale.sale_date|egypt_date }}<br>
+                                <small class="text-muted">{{ sale.sale_date|egypt_time }}</small>
                             </td>
                             <td class="currency text-success fw-bold">
                                 {{ sale.total_amount|currency }}
@@ -644,10 +644,10 @@
         <body>
             <div class="invoice-container">
                 <div class="header">
-                    <h1>📚 مكتبة الأحلام</h1>
+                    <h1>📚 Norko Store</h1>
                     <h2>فاتورة بيع</h2>
                     <div class="company-info">
-                        <p>📍 123 شارع المعرفة، القاهرة | 📞 02-1234-5678 | 📧 info@dreamlibrary.com</p>
+                        <p> البرامون شارع السوق بجوار المدرسة الاعدادية | 01507000704 </p>
                     </div>
                 </div>
                 <div class="invoice-body">

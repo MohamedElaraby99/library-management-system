@@ -17,6 +17,7 @@ body {
   border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  margin-top: 1rem;
 }
 
 .card:hover {
@@ -87,6 +88,7 @@ body {
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  margin-top: 1rem;
 }
 
 .table th {
@@ -424,29 +426,140 @@ body {
   }
 }
 
-/* تحسينات للـ modal */
+/* حل شامل لجميع الـ modals في النظام */
+/* إزالة الـ backdrop الافتراضي تماماً */
+.modal-backdrop,
+.modal-backdrop.fade,
+.modal-backdrop.show {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* إنشاء backdrop مخصص لجميع الـ modals */
+.modal::before {
+  content: "";
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  z-index: 9990 !important;
+  opacity: 0;
+  transition: opacity 0.15s linear;
+  pointer-events: auto !important;
+}
+
+.modal.show::before {
+  opacity: 1 !important;
+}
+
+/* إصلاح الـ modal نفسه */
+.modal {
+  z-index: 9999 !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  outline: 0 !important;
+}
+
 .modal-dialog {
-  z-index: 1055;
-  position: relative;
+  z-index: 10000 !important;
+  position: relative !important;
+  margin: 1.75rem auto !important;
+  pointer-events: none !important;
+  width: auto !important;
+  max-width: 500px !important;
 }
 
 .modal-content {
-  border: none;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-}
-
-.modal-backdrop {
-  z-index: 1054;
+  border: none !important;
+  border-radius: 12px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5) !important;
+  z-index: 10001 !important;
+  position: relative !important;
+  pointer-events: auto !important;
+  background-color: #fff !important;
+  background-clip: padding-box !important;
+  outline: 0 !important;
+  margin-top: 130px;
 }
 
 /* التأكد من أن الـ modal في المقدمة دائماً */
 .modal.show {
-  z-index: 1055;
+  z-index: 9999 !important;
   display: block !important;
 }
 
 .modal.show .modal-dialog {
-  transform: none;
-  z-index: 1056;
+  transform: none !important;
+  z-index: 10000 !important;
+}
+
+.modal.show .modal-content {
+  z-index: 10001 !important;
+  margin-top: 130px;
+}
+
+/* إصلاح مشاكل الـ pointer events والتفاعل */
+.modal .modal-header,
+.modal .modal-body,
+.modal .modal-footer {
+  pointer-events: auto !important;
+  z-index: 10002 !important;
+  position: relative !important;
+}
+
+/* تأكيد أن الأزرار قابلة للنقر */
+.modal .btn,
+.modal .form-control,
+.modal .btn-close {
+  pointer-events: auto !important;
+  z-index: 10003 !important;
+  position: relative !important;
+}
+
+/* منع scroll للـ body عند فتح modal */
+body.modal-open {
+  overflow: hidden !important;
+}
+
+/* إصلاح للموبايل */
+@media (max-width: 576px) {
+  .modal-dialog {
+    margin: 0.5rem !important;
+    max-width: calc(100% - 1rem) !important;
+  }
+
+  .modal-content {
+    border-radius: 8px !important;
+    margin-top: 130px;
+  }
+}
+
+/* إضافة مسافة للمحتوى الرئيسي */
+.container-fluid {
+  padding-top: 1rem;
+}
+
+/* تحسين المسافات للعناوين والمحتوى */
+h1,
+h2,
+h3,
+.h1,
+.h2,
+.h3 {
+  margin-top: 1rem;
+}
+
+/* مسافة إضافية للصفوف */
+.row.mb-4 {
+  margin-top: 1rem;
 }

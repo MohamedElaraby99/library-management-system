@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}الفئات - نظام إدارة مكتبة Norko{% endblock %}
+{% block title %}الفئات - إدارة Norko Store{% endblock %}
+
+{% block extra_css %}
+<!-- تم نقل حل الـ modal إلى ملف CSS الرئيسي - لا حاجة لأنماط إضافية -->
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -86,7 +90,8 @@
 </div>
 
 <!-- Delete Confirmation Modal -->
-<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true"
+    data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
@@ -139,26 +144,26 @@
                 const categoryId = button.getAttribute('data-category-id');
                 const categoryName = button.getAttribute('data-category-name');
 
-                console.log('Modal opening for category:', categoryName, 'ID:', categoryId);
-
                 if (categoryNameSpan && categoryName) {
                     categoryNameSpan.textContent = categoryName;
                 }
 
                 if (deleteForm && categoryId) {
                     deleteForm.action = `/categories/${categoryId}/delete`;
-                    console.log('Form action set to:', deleteForm.action);
                 }
             });
 
             // Handle form submission
-            deleteForm.addEventListener('submit', function (e) {
-                console.log('Form submitting to:', this.action);
-                // Add loading state
-                const submitBtn = this.querySelector('button[type="submit"]');
-                submitBtn.innerHTML = '<i class="spinner-border spinner-border-sm me-2"></i>جاري الحذف...';
-                submitBtn.disabled = true;
-            });
+            if (deleteForm) {
+                deleteForm.addEventListener('submit', function (e) {
+                    // Add loading state
+                    const submitBtn = this.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.innerHTML = '<i class="spinner-border spinner-border-sm me-2"></i>جاري الحذف...';
+                        submitBtn.disabled = true;
+                    }
+                });
+            }
         }
     });
 </script>

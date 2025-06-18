@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from functools import wraps
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
 from flask_mail import Mail, Message
@@ -7,6 +8,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_talisman import Talisman
 from datetime import datetime, timedelta
+import pytz
 from sqlalchemy import func, desc, and_
 import json
 import os
@@ -14,14 +16,18 @@ import logging
 import secrets
 
 from config import config
-from models import db, User, Category, Product, Sale, SaleItem, Customer, Payment, Expense
-from forms import LoginForm, UserForm, CategoryForm, ProductForm, SaleForm, SaleItemForm, StockUpdateForm, CustomerForm, PaymentForm, ExpenseForm
+from models import db, User, Category, Product, Sale, SaleItem, Customer, Payment, Expense, ShoppingList
+from forms import LoginForm, UserForm, CategoryForm, ProductForm, SaleForm, SaleItemForm, StockUpdateForm, CustomerForm, PaymentForm, ExpenseForm, ShoppingListForm
 
 app = Flask(__name__)
 
 # Load configuration based on environment
 config_name = os.environ.get('FLASK_CONFIG') or 'default'
 app.config.from_object(config[config_name])
+
+# تعيين إعدادات الترميز للنصوص العربية
+app.config['JSON_AS_ASCII'] = False
+app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
 
 # Initialize extensions
 db.init_app(app)
@@ -72,6 +78,30 @@ def load_user(user_id):
     except:
         return None
 
+def admin_required(f):
+    """Decorator للتحقق من صلاحيات الأدمن"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        if current_user.role != 'admin':
+            flash('ليس لديك صلاحية للوصول إلى هذه الصفحة', 'error')
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def seller_or_admin_required(f):
+    """Decorator للتحقق من صلاحيات البائع أو الأدمن"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for('login'))
+        if current_user.role not in ['admin', 'seller']:
+            flash('ليس لديك صلاحية للوصول إلى هذه الصفحة', 'error')
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 def format_currency(amount):
     """Format currency for Egyptian Pounds"""
     return f"{amount:.2f} ج.م"
@@ -82,9 +112,49 @@ def format_date(date):
               'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
     return f"{date.day} {months[date.month-1]} {date.year}"
 
+def get_egypt_time(utc_datetime=None):
+    """تحويل التوقيت من UTC إلى توقيت مصر"""
+    egypt_tz = pytz.timezone('Africa/Cairo')
+    if utc_datetime is None:
+        utc_datetime = datetime.utcnow()
+    
+    # إذا كان التاريخ لا يحتوي على معلومات المنطقة الزمنية، افترض أنه UTC
+    if utc_datetime.tzinfo is None:
+        utc_datetime = pytz.utc.localize(utc_datetime)
+    
+    # تحويل إلى توقيت مصر
+    egypt_time = utc_datetime.astimezone(egypt_tz)
+    return egypt_time
+
+def format_egypt_datetime(utc_datetime):
+    """تنسيق التاريخ والوقت بتوقيت مصر"""
+    egypt_time = get_egypt_time(utc_datetime)
+    return egypt_time.strftime('%Y-%m-%d %H:%M:%S')
+
+def format_egypt_time_only(utc_datetime):
+    """تنسيق الوقت فقط بتوقيت مصر"""
+    egypt_time = get_egypt_time(utc_datetime)
+    return egypt_time.strftime('%H:%M')
+
+def format_egypt_date_only(utc_datetime):
+    """تنسيق التاريخ فقط بتوقيت مصر"""
+    egypt_time = get_egypt_time(utc_datetime)
+    return egypt_time.strftime('%d/%m/%Y')
+
 # Template filters
 app.jinja_env.filters['currency'] = format_currency
 app.jinja_env.filters['arabic_date'] = format_date
+app.jinja_env.filters['egypt_datetime'] = format_egypt_datetime
+app.jinja_env.filters['egypt_time'] = format_egypt_time_only
+app.jinja_env.filters['egypt_date'] = format_egypt_date_only
+
+# إضافة header لضمان الترميز الصحيح للنصوص العربية
+@app.after_request
+def after_request(response):
+    response.headers['Content-Type'] = 'text/html; charset=utf-8'
+    if response.mimetype == 'application/json':
+        response.headers['Content-Type'] = 'application/json; charset=utf-8'
+    return response
 
 @app.context_processor
 def inject_debt_stats():
@@ -353,7 +423,7 @@ def send_password_reset_email(user, token):
     if not app.config.get('MAIL_USERNAME'):
         raise Exception("Email not configured")
     
-    subject = 'إعادة تعيين كلمة المرور - نظام إدارة مكتبة Norko'
+    subject = 'إعادة تعيين كلمة المرور - إدارة Norko Store'
     reset_url = url_for('reset_password', token=token, _external=True)
     
     body = f"""
@@ -369,7 +439,7 @@ def send_password_reset_email(user, token):
     إذا لم تطلب إعادة تعيين كلمة المرور، يرجى تجاهل هذه الرسالة.
     
     تحياتنا،
-    فريق نظام إدارة مكتبة Norko
+    فريق إدارة Norko Store
     """
     
     msg = Message(
@@ -472,6 +542,7 @@ def dashboard():
 
 @app.route('/products')
 @login_required
+@admin_required
 def products():
     page = request.args.get('page', 1, type=int)
     search = request.args.get('search', '', type=str)
@@ -493,6 +564,7 @@ def products():
 
 @app.route('/products/add', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def add_product():
     if not current_user.is_admin():
         flash('ليس لديك صلاحية للوصول إلى هذه الصفحة', 'error')
@@ -521,6 +593,7 @@ def add_product():
 
 @app.route('/products/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def edit_product(id):
     if not current_user.is_admin():
         flash('ليس لديك صلاحية للوصول إلى هذه الصفحة', 'error')
@@ -540,6 +613,7 @@ def edit_product(id):
 
 @app.route('/products/<int:id>/delete', methods=['POST'])
 @login_required
+@admin_required
 def delete_product(id):
     if not current_user.is_admin():
         flash('ليس لديك صلاحية لحذف المنتجات', 'error')
@@ -553,6 +627,7 @@ def delete_product(id):
 
 @app.route('/categories')
 @login_required
+@admin_required
 def categories():
     if not current_user.is_admin():
         flash('ليس لديك صلاحية للوصول إلى هذه الصفحة', 'error')
@@ -563,6 +638,7 @@ def categories():
 
 @app.route('/categories/add', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def add_category():
     if not current_user.is_admin():
         flash('ليس لديك صلاحية للوصول إلى هذه الصفحة', 'error')
@@ -583,6 +659,7 @@ def add_category():
 
 @app.route('/categories/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def edit_category(id):
     if not current_user.is_admin():
         flash('ليس لديك صلاحية للوصول إلى هذه الصفحة', 'error')
@@ -601,6 +678,7 @@ def edit_category(id):
 
 @app.route('/categories/<int:id>/delete', methods=['POST'])
 @login_required
+@admin_required
 def delete_category(id):
     """حذف فئة"""
     if not current_user.is_admin():
@@ -623,6 +701,7 @@ def delete_category(id):
 # User management routes
 @app.route('/users')
 @login_required
+@admin_required
 def users():
     """عرض قائمة المستخدمين"""
     if not current_user.is_admin():
@@ -635,6 +714,7 @@ def users():
 
 @app.route('/users/add', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def add_user():
     """إضافة مستخدم جديد"""
     if not current_user.is_admin():
@@ -662,6 +742,7 @@ def add_user():
 
 @app.route('/users/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def edit_user(id):
     """تعديل مستخدم"""
     if not current_user.is_admin():
@@ -707,6 +788,7 @@ def edit_user(id):
 
 @app.route('/users/<int:id>/delete', methods=['POST'])
 @login_required
+@admin_required
 def delete_user(id):
     """حذف مستخدم"""
     if not current_user.is_admin():
@@ -739,6 +821,7 @@ def delete_user(id):
 # Customer management routes
 @app.route('/customers')
 @login_required
+@admin_required
 def customers():
     """عرض قائمة العملاء"""
     customers = Customer.query.order_by(Customer.name).all()
@@ -746,6 +829,7 @@ def customers():
 
 @app.route('/customers/add', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def add_customer():
     """إضافة عميل جديد"""
     if request.method == 'POST':
@@ -783,6 +867,7 @@ def add_customer():
 
 @app.route('/customers/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def edit_customer(id):
     """تعديل بيانات عميل"""
     customer = Customer.query.get_or_404(id)
@@ -799,6 +884,7 @@ def edit_customer(id):
 
 @app.route('/customers/<int:id>/delete', methods=['POST'])
 @login_required
+@admin_required
 def delete_customer(id):
     """حذف عميل"""
     customer = Customer.query.get_or_404(id)
@@ -816,6 +902,7 @@ def delete_customer(id):
 
 @app.route('/customers/<int:id>/account')
 @login_required
+@admin_required
 def customer_account(id):
     """عرض حساب العميل والديون"""
     customer = Customer.query.get_or_404(id)
@@ -824,6 +911,7 @@ def customer_account(id):
 
 @app.route('/customers/<int:customer_id>/sales/<int:sale_id>/payment', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def add_payment(customer_id, sale_id):
     """إضافة دفعة لمبيعة"""
     customer = Customer.query.get_or_404(customer_id)
@@ -868,6 +956,7 @@ def add_payment(customer_id, sale_id):
 
 @app.route('/debts')
 @login_required
+@admin_required
 def debts_report():
     """تقرير الديون"""
     # العملاء الذين لديهم ديون
@@ -895,6 +984,7 @@ def debts_report():
 
 @app.route('/sales')
 @login_required
+@seller_or_admin_required
 def sales():
     page = request.args.get('page', 1, type=int)
     sales = Sale.query.order_by(desc(Sale.sale_date)).paginate(
@@ -903,11 +993,13 @@ def sales():
 
 @app.route('/sales/new')
 @login_required
+@seller_or_admin_required
 def new_sale():
     return render_template('sales/new.html')
 
 @app.route('/api/products')
 @login_required
+@seller_or_admin_required
 def api_products():
     """API endpoint to get all products"""
     products = Product.query.all()  # Get all products for stock update
@@ -940,6 +1032,7 @@ def api_categories():
 
 @app.route('/api/customers')
 @login_required
+@seller_or_admin_required
 def api_customers():
     """API endpoint to get all customers"""
     customers = Customer.query.order_by(Customer.name).all()
@@ -952,6 +1045,7 @@ def api_customers():
 
 @app.route('/api/sales', methods=['POST'])
 @login_required
+@seller_or_admin_required
 def api_create_sale():
     """API endpoint to create a new sale"""
     data = request.get_json()
@@ -1070,9 +1164,14 @@ def api_sale_details(sale_id):
             'unit_type': item.product.unit_type
         })
     
+    # تحويل التاريخ إلى توقيت مصر
+    egypt_time = get_egypt_time(sale.sale_date)
+    
     return jsonify({
         'id': sale.id,
-        'sale_date': sale.sale_date.isoformat(),
+        'sale_date': egypt_time.strftime('%Y-%m-%d'),
+        'sale_time': egypt_time.strftime('%H:%M:%S'),
+        'sale_datetime': egypt_time.strftime('%Y-%m-%d %H:%M:%S'),
         'total_amount': float(sale.total_amount),
         'notes': sale.notes,
         'user_name': sale.user.username,
@@ -1123,8 +1222,8 @@ def api_export_sales():
         for item in sale.sale_items:
             sales_data.append({
                 'sale_id': sale.id,
-                'sale_date': sale.sale_date.strftime('%Y-%m-%d'),
-                'sale_time': sale.sale_date.strftime('%H:%M:%S'),
+                'sale_date': format_egypt_date_only(sale.sale_date),
+                'sale_time': format_egypt_time_only(sale.sale_date),
                 'seller_name': sale.user.username,
                 'seller_role': sale.user.role,
                 'product_name': item.product.name_ar,
@@ -1319,6 +1418,7 @@ def api_export_inventory():
 
 @app.route('/reports')
 @login_required
+@admin_required
 def reports():
     if current_user.role not in ['admin', 'seller']:
         flash('ليس لديك صلاحية للوصول إلى هذه الصفحة', 'error')
@@ -1479,6 +1579,7 @@ def reports():
 # إدارة المصاريف
 @app.route('/expenses')
 @login_required
+@admin_required
 def expenses():
     """عرض قائمة المصاريف"""
     if not current_user.is_admin():
@@ -1578,6 +1679,158 @@ def delete_expense(id):
     db.session.commit()
     flash(f'تم حذف المصروف "{description}" بنجاح', 'success')
     return redirect(url_for('expenses'))
+
+# ==================== النواقص ====================
+
+@app.route('/shopping-list')
+@login_required
+@admin_required
+def shopping_list():
+    """صفحة النواقص"""
+    # الحصول على قائمة النواقص المطلوبة
+    needed_items = ShoppingList.query.filter_by(status='مطلوب').order_by(
+        ShoppingList.priority.desc(), ShoppingList.created_at.desc()
+    ).all()
+    
+    # الحصول على المنتجات التي نفدت أو قاربت على النفاد
+    out_of_stock = Product.query.filter(Product.stock_quantity <= 0).all()
+    low_stock = Product.query.filter(
+        and_(Product.stock_quantity > 0, 
+             Product.stock_quantity <= Product.min_stock_threshold)
+    ).all()
+    
+    # حساب إجمالي التكلفة المتوقعة
+    total_estimated_cost = sum(item.total_estimated_cost for item in needed_items if item.estimated_price)
+    
+    return render_template('shopping/list.html', 
+                         needed_items=needed_items,
+                         out_of_stock=out_of_stock,
+                         low_stock=low_stock,
+                         total_estimated_cost=total_estimated_cost)
+
+@app.route('/shopping-list/add', methods=['GET', 'POST'])
+@login_required
+def add_shopping_item():
+    """إضافة منتج لقائمة النواقص"""
+    form = ShoppingListForm()
+    if form.validate_on_submit():
+        try:
+            shopping_item = ShoppingList(
+                item_name=form.item_name.data,
+                quantity_needed=form.quantity_needed.data,
+                unit_type=form.unit_type.data,
+                estimated_price=form.estimated_price.data,
+                priority=form.priority.data,
+                category=form.category.data,
+                supplier=form.supplier.data,
+                notes=form.notes.data,
+                user_id=current_user.id
+            )
+            db.session.add(shopping_item)
+            db.session.commit()
+            flash('تم إضافة المنتج لقائمة النواقص بنجاح', 'success')
+            return redirect(url_for('shopping_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'خطأ في إضافة المنتج: {str(e)}', 'error')
+    
+    return render_template('shopping/add.html', form=form)
+
+@app.route('/shopping-list/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_shopping_item(id):
+    """تعديل منتج في قائمة النواقص"""
+    item = ShoppingList.query.get_or_404(id)
+    form = ShoppingListForm(obj=item)
+    
+    if form.validate_on_submit():
+        try:
+            item.item_name = form.item_name.data
+            item.quantity_needed = form.quantity_needed.data
+            item.unit_type = form.unit_type.data
+            item.estimated_price = form.estimated_price.data
+            item.priority = form.priority.data
+            item.category = form.category.data
+            item.supplier = form.supplier.data
+            item.notes = form.notes.data
+            
+            db.session.commit()
+            flash('تم تحديث المنتج بنجاح', 'success')
+            return redirect(url_for('shopping_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'خطأ في تحديث المنتج: {str(e)}', 'error')
+    
+    return render_template('shopping/edit.html', form=form, item=item)
+
+@app.route('/shopping-list/<int:id>/delete', methods=['POST'])
+@login_required
+def delete_shopping_item(id):
+    """حذف منتج من قائمة النواقص"""
+    try:
+        item = ShoppingList.query.get_or_404(id)
+        db.session.delete(item)
+        db.session.commit()
+        flash('تم حذف المنتج من قائمة النواقص', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'خطأ في حذف المنتج: {str(e)}', 'error')
+    
+    return redirect(url_for('shopping_list'))
+
+@app.route('/shopping-list/<int:id>/mark-purchased', methods=['POST'])
+@login_required
+def mark_purchased(id):
+    """تحديد منتج كمُشترى"""
+    try:
+        item = ShoppingList.query.get_or_404(id)
+        item.status = 'تم الشراء'
+        item.purchased_date = datetime.utcnow()
+        db.session.commit()
+        flash('تم تحديد المنتج كمُشترى', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'خطأ في تحديث حالة المنتج: {str(e)}', 'error')
+    
+    return redirect(url_for('shopping_list'))
+
+@app.route('/shopping-list/add-low-stock/<int:product_id>')
+@login_required
+def add_low_stock_product(product_id):
+    """إضافة منتج منخفض المخزون لقائمة النواقص"""
+    product = Product.query.get_or_404(product_id)
+    
+    # التحقق من عدم وجود المنتج في القائمة بالفعل
+    existing = ShoppingList.query.filter_by(
+        item_name=product.name_ar, 
+        status='مطلوب'
+    ).first()
+    
+    if existing:
+        flash('هذا المنتج موجود بالفعل في قائمة النواقص', 'warning')
+    else:
+        try:
+            # تحديد الكمية المقترحة (الحد الأدنى - الكمية الحالية)
+            suggested_quantity = max(product.min_stock_threshold - product.stock_quantity, 10)
+            
+            shopping_item = ShoppingList(
+                item_name=product.name_ar,
+                quantity_needed=suggested_quantity,
+                unit_type=product.unit_type,
+                estimated_price=product.wholesale_price,
+                priority='high' if product.is_out_of_stock else 'medium',
+                category=product.category.name_ar if product.category else None,
+                notes=f'منتج {"نفد" if product.is_out_of_stock else "منخفض"} من المخزون - الكمية الحالية: {product.stock_quantity}',
+                user_id=current_user.id
+            )
+            db.session.add(shopping_item)
+            db.session.commit()
+            flash('تم إضافة المنتج لقائمة النواقص', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'خطأ في إضافة المنتج: {str(e)}', 'error')
+    
+    return redirect(url_for('shopping_list'))
 
 @app.route('/test-export')
 @login_required

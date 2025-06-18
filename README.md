@@ -1,4 +1,4 @@
-# نظام إدارة مكتبة Norko
+# إدارة Norko Store
 
 نظام متكامل لإدارة المكتبات، مبني باستخدام Flask مع تحسينات الأداء والحجم.
 
@@ -56,7 +56,7 @@ FLASK_APP=wsgi.py
 FLASK_ENV=production
 SECRET_KEY=your-secret-key-here
 DATABASE_URL=sqlite:///library.db
-APP_NAME=نظام إدارة مكتبة Norko
+APP_NAME=إدارة Norko Store
 APP_VERSION=1.0.0
 ```
 

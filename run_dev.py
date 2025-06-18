@@ -17,7 +17,11 @@ from app import app
 if __name__ == '__main__':
     print("🚀 Starting Library Management System in development mode...")
     print("📍 Application will be available at: http://localhost:5000")
-    print("👤 Default admin login: admin / admin123")
+    print()
+    print("👤 متاح تسجيل الدخول بالحسابات التالية:")
+    print("   🔐 أدمن: admin / admin123")
+    print("   🛒 بائع: seller / seller123")
+    print()
     print("🔧 Development mode: Debug enabled, Security features disabled")
     print("-" * 60)
     

@@ -38,5 +38,8 @@ flask-talisman==1.1.0
 # CLI management tools
 click==8.1.7
 
+# Timezone support
+pytz==2023.3
+
 # Development and debugging tools (remove in production)
 flask-debugtoolbar==0.13.1 

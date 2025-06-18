@@ -122,4 +122,20 @@ class ExpenseForm(FlaskForm):
     category = StringField('فئة المصروف', validators=[Optional(), Length(max=100)])
     expense_date = DateTimeField('تاريخ المصروف', format='%Y-%m-%d', validators=[Optional()])
     notes = TextAreaField('ملاحظات')
-    submit = SubmitField('حفظ المصروف') 
+    submit = SubmitField('حفظ المصروف')
+
+# نموذج جديد للنواقص
+class ShoppingListForm(FlaskForm):
+    item_name = StringField('اسم المنتج المطلوب', validators=[DataRequired(), Length(min=2, max=200)])
+    quantity_needed = FloatField('الكمية المطلوبة', validators=[DataRequired(), NumberRange(min=0.01)])
+    unit_type = SelectField('نوع الوحدة', 
+                           choices=[('كامل', 'كامل'), ('جزئي', 'جزئي'), ('كيلو', 'كيلو'), ('متر', 'متر'), ('صندوق', 'صندوق')], 
+                           validators=[DataRequired()])
+    estimated_price = FloatField('السعر المتوقع للوحدة (ج.م)', validators=[Optional(), NumberRange(min=0)])
+    priority = SelectField('الأولوية', 
+                          choices=[('high', 'عالي'), ('medium', 'متوسط'), ('low', 'منخفض')], 
+                          validators=[DataRequired()])
+    category = StringField('الفئة', validators=[Optional(), Length(max=100)])
+    supplier = StringField('المورد المقترح', validators=[Optional(), Length(max=200)])
+    notes = TextAreaField('ملاحظات')
+    submit = SubmitField('إضافة للقائمة') 

@@ -324,6 +324,53 @@ class Expense(db.Model):
         }
         return types.get(self.expense_type, self.expense_type)
 
+# نموذج جديد للنواقص
+class ShoppingList(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    item_name = db.Column(db.String(200), nullable=False, comment='اسم المنتج المطلوب')
+    quantity_needed = db.Column(db.Float, nullable=False, default=1, comment='الكمية المطلوبة')
+    unit_type = db.Column(db.String(50), nullable=False, default='كامل', comment='نوع الوحدة')
+    estimated_price = db.Column(db.Float, nullable=True, comment='السعر المتوقع')
+    priority = db.Column(db.String(20), nullable=False, default='متوسط', comment='الأولوية')  # 'عالي', 'متوسط', 'منخفض'
+    notes = db.Column(db.Text, comment='ملاحظات')
+    status = db.Column(db.String(20), nullable=False, default='مطلوب', comment='الحالة')  # 'مطلوب', 'تم الشراء', 'ملغي'
+    category = db.Column(db.String(100), comment='الفئة')
+    supplier = db.Column(db.String(200), comment='المورد المقترح')
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, comment='المستخدم الذي أضاف البند')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    purchased_date = db.Column(db.DateTime, nullable=True, comment='تاريخ الشراء')
+    
+    # Relationships
+    user = db.relationship('User', backref='shopping_items', lazy=True)
+    
+    @property
+    def priority_ar(self):
+        """ترجمة الأولوية للعربية"""
+        priorities = {
+            'high': 'عالي',
+            'medium': 'متوسط', 
+            'low': 'منخفض'
+        }
+        return priorities.get(self.priority, self.priority)
+    
+    @property
+    def status_ar(self):
+        """ترجمة الحالة للعربية"""
+        statuses = {
+            'needed': 'مطلوب',
+            'purchased': 'تم الشراء',
+            'cancelled': 'ملغي'
+        }
+        return statuses.get(self.status, self.status)
+    
+    @property
+    def total_estimated_cost(self):
+        """إجمالي التكلفة المتوقعة"""
+        if self.estimated_price:
+            return self.quantity_needed * self.estimated_price
+        return 0
+
 def create_static_user():
     """إنشاء المستخدم الثابت للنظام"""
     static_username = "araby"
