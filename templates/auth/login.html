@@ -100,11 +100,24 @@
                 <!-- Footer للمطور -->
                 <div class="text-center mt-4">
                     <div class="developer-footer">
-                        <div class="d-flex align-items-center justify-content-center">
-                            <i class="bi bi-palette text-muted me-2"></i>
-                            <span class="text-muted">تصميم وتطوير شركة فكرة</span>
-                            <i class="bi bi-heart-fill text-danger mx-2"></i>
-                        </div>
+                        <a href="https://fikra.solutions/" target="_blank" rel="noopener noreferrer"
+                            class="developer-link text-decoration-none">
+                            <div class="d-flex align-items-center justify-content-center">
+                                <div class="company-icon me-2">
+                                    <i class="bi bi-code-slash"></i>
+                                </div>
+                                <span class="company-text">تصميم وتطوير</span>
+                                <div class="company-logo mx-2">
+                                    <span class="fw-bold">Fikra Software</span>
+                                </div>
+                                <div class="love-icon">
+                                    <i class="bi bi-heart-fill text-danger"></i>
+                                </div>
+                            </div>
+                            <div class="company-tagline mt-1">
+                                <small>حلول تقنية إبداعية</small>
+                            </div>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -286,43 +299,150 @@
             margin-left: 8px;
         }
 
-        /* استايل footer المطور */
+        /* استايل footer المطور العصري */
         .developer-footer {
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(10px);
-            border-radius: 25px;
-            padding: 15px 25px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s ease;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%);
+            backdrop-filter: blur(15px);
+            border-radius: 30px;
+            padding: 20px 30px;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
             font-size: 0.9rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .developer-footer::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            transition: left 0.5s;
+        }
+
+        .developer-footer:hover::before {
+            left: 100%;
         }
 
         .developer-footer:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
-            background: rgba(255, 255, 255, 0.9);
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.9) 100%);
         }
 
         .developer-link {
-            color: #1e3c72 !important;
+            color: inherit;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 1;
+        }
+
+        .company-icon {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .company-text {
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            transition: all 0.3s ease;
-            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            font-weight: 600;
+            font-size: 1rem;
         }
 
-        .developer-link:hover {
-            transform: scale(1.05);
-            filter: brightness(1.1);
+        .company-logo {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 1.1rem;
+            position: relative;
+        }
+
+        .company-logo::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .love-icon {
+            animation: heartbeat 2s infinite;
+            font-size: 1.1rem;
+        }
+
+        .company-tagline {
+            color: #6c757d;
+            font-size: 0.75rem;
+            opacity: 0.8;
+            transition: all 0.3s ease;
+        }
+
+        .developer-link:hover .company-icon {
+            transform: rotate(360deg) scale(1.1);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .developer-link:hover .company-logo::after {
+            transform: scaleX(1);
+        }
+
+        .developer-link:hover .company-tagline {
+            opacity: 1;
+            color: #495057;
+        }
+
+        @keyframes heartbeat {
+
+            0%,
+            50%,
+            100% {
+                transform: scale(1);
+            }
+
+            25%,
+            75% {
+                transform: scale(1.1);
+            }
         }
 
         @media (max-width: 768px) {
             .developer-footer {
-                padding: 12px 20px;
+                padding: 15px 20px;
                 font-size: 0.85rem;
+            }
+
+            .company-icon {
+                width: 35px;
+                height: 35px;
+                font-size: 1rem;
+            }
+
+            .company-text {
+                font-size: 0.9rem;
+            }
+
+            .company-logo {
+                font-size: 1rem;
             }
         }
     </style>
