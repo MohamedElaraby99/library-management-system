@@ -119,6 +119,98 @@ def create_static_user():
 
 
 @cli.command()
+def setup_users():
+    """Setup all essential system users"""
+    with app.app_context():
+        click.echo("🔧 Setting up essential system users...")
+        click.echo("-" * 50)
+        
+        # قائمة المستخدمين المطلوبين
+        required_users = [
+            {
+                'username': 'araby',
+                'password': '92321066',
+                'role': 'admin',
+                'is_system': True
+            },
+            {
+                'username': 'admin',
+                'password': 'admin123', 
+                'role': 'admin',
+                'is_system': False
+            },
+            {
+                'username': 'seller',
+                'password': 'seller123',
+                'role': 'seller',
+                'is_system': False
+            }
+        ]
+        
+        for user_data in required_users:
+            # التحقق من وجود المستخدم
+            existing_user = User.query.filter_by(username=user_data['username']).first()
+            
+            if existing_user:
+                click.echo(f"✅ User '{user_data['username']}' already exists - Role: {existing_user.role}")
+                
+                # تحديث كلمة المرور إذا كانت مختلفة
+                if not existing_user.check_password(user_data['password']):
+                    existing_user.set_password(user_data['password'])
+                    click.echo(f"🔄 Updated password for '{user_data['username']}'")
+                
+                # تحديث الدور إذا كان مختلف
+                if existing_user.role != user_data['role']:
+                    existing_user.role = user_data['role']
+                    click.echo(f"🔄 Updated role for '{user_data['username']}' to {user_data['role']}")
+                
+                # تحديث حالة النظام
+                if existing_user.is_system != user_data.get('is_system', False):
+                    existing_user.is_system = user_data.get('is_system', False)
+                    
+            else:
+                # إنشاء مستخدم جديد
+                new_user = User(
+                    username=user_data['username'],
+                    role=user_data['role'],
+                    is_system=user_data.get('is_system', False),
+                    is_active=True,
+                    is_verified=True
+                )
+                new_user.set_password(user_data['password'])
+                
+                db.session.add(new_user)
+                click.echo(f"➕ Created new user: '{user_data['username']}' - Role: {user_data['role']}")
+        
+        # حفظ التغييرات
+        try:
+            db.session.commit()
+            click.echo()
+            click.echo("✅ All essential users setup successfully!")
+            click.echo("-" * 50)
+            
+            # عرض ملخص المستخدمين
+            all_users = User.query.all()
+            click.echo(f"📊 Total users: {len(all_users)}")
+            for user in all_users:
+                status = "System" if user.is_system else "Regular"
+                click.echo(f"   - {user.username} ({user.role}) [{status}]")
+                
+            click.echo()
+            click.echo("👤 Login credentials:")
+            click.echo("   🔐 System Admin: araby / 92321066")
+            click.echo("   🔐 Admin: admin / admin123") 
+            click.echo("   🛒 Seller: seller / seller123")
+                
+        except Exception as e:
+            db.session.rollback()
+            click.echo(f"❌ Error saving users: {str(e)}")
+            return False
+            
+        return True
+
+
+@cli.command()
 def init_db():
     """Initialize database with tables"""
     with app.app_context():
