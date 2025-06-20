@@ -139,7 +139,7 @@ def format_egypt_datetime(utc_datetime):
 def format_egypt_time_only(utc_datetime):
     """تنسيق الوقت فقط بتوقيت مصر"""
     egypt_time = get_egypt_time(utc_datetime)
-    return egypt_time.strftime('%H:%M')
+    return egypt_time.strftime('%H:%M:%S')
 
 def format_egypt_date_only(utc_datetime):
     """تنسيق التاريخ فقط بتوقيت مصر"""
@@ -1082,20 +1082,53 @@ def new_sale():
 @seller_or_admin_required
 def api_products():
     """API endpoint to get all products"""
-    products = Product.query.all()  # Get all products for stock update
-    return jsonify([{
-        'id': p.id,
-        'name': p.name_ar,
-        'wholesale_price': p.wholesale_price if hasattr(p, 'wholesale_price') and p.wholesale_price else p.price,
-        'retail_price': p.retail_price if hasattr(p, 'retail_price') and p.retail_price else p.price,
-        'price': p.retail_price if hasattr(p, 'retail_price') and p.retail_price else p.price,
-        'stock': p.stock_quantity,
-        'unit_type': p.unit_type,
-        'category': p.category.name_ar if p.category else 'غير محدد',
-        'min_stock_threshold': p.min_stock_threshold or 10,
-        'profit_margin': p.profit_margin if hasattr(p, 'profit_margin') else 0,
-        'profit_percentage': p.profit_percentage if hasattr(p, 'profit_percentage') else 0
-    } for p in products])
+    try:
+        app.logger.info(f"API products called by user: {current_user.username}")
+        products = Product.query.all()
+        app.logger.info(f"Found {len(products)} products in database")
+        
+        result = []
+        for p in products:
+            try:
+                # Use safe attribute access with fallbacks
+                wholesale_price = p.wholesale_price if p.wholesale_price else (p.price if p.price else 0)
+                retail_price = p.retail_price if p.retail_price else (p.price if p.price else 0)
+                
+                product_data = {
+                    'id': p.id,
+                    'name': p.name_ar or 'منتج غير محدد',
+                    'wholesale_price': float(wholesale_price),
+                    'retail_price': float(retail_price),
+                    'price': float(retail_price),  # Use retail_price as the main price
+                    'stock': float(p.stock_quantity or 0),
+                    'unit_type': p.unit_type or 'كامل',
+                    'category': p.category.name_ar if p.category else 'غير محدد',
+                    'min_stock_threshold': float(p.min_stock_threshold or 10),
+                    'profit_margin': 0,
+                    'profit_percentage': 0
+                }
+                
+                # Add profit calculations if possible
+                try:
+                    if wholesale_price > 0 and retail_price > 0:
+                        profit_margin = retail_price - wholesale_price
+                        profit_percentage = (profit_margin / wholesale_price) * 100
+                        product_data['profit_margin'] = float(profit_margin)
+                        product_data['profit_percentage'] = float(profit_percentage)
+                except:
+                    pass
+                
+                result.append(product_data)
+            except Exception as e:
+                # Skip problematic products but log the error
+                app.logger.error(f"Error processing product {p.id}: {str(e)}")
+                continue
+        
+        app.logger.info(f"Returning {len(result)} products to client")
+        return jsonify(result)
+    except Exception as e:
+        app.logger.error(f"Error in api_products: {str(e)}")
+        return jsonify({'error': 'حدث خطأ في تحميل المنتجات'}), 500
 
 @app.route('/api/categories')
 @login_required

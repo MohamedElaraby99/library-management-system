@@ -322,18 +322,48 @@
 
     function loadProducts() {
         console.log('Loading products...');
-        fetch('/api/products')
+        document.getElementById('productsList').innerHTML = `
+            <div class="col-12 text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">جاري التحميل...</span>
+                </div>
+                <p class="mt-2 text-muted">جاري تحميل المنتجات...</p>
+            </div>
+        `;
+
+        fetch('/api/products', {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        })
             .then(response => {
                 console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                console.log('Response ok:', response.ok);
+
+                if (response.status === 401) {
+                    throw new Error('غير مسموح - يجب تسجيل الدخول');
+                }
+                if (response.status === 403) {
+                    throw new Error('ليس لديك صلاحية للوصول لهذه البيانات');
+                }
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 return response.json();
             })
             .then(data => {
                 console.log('Products loaded:', data);
+                console.log('Number of products:', data.length);
+                if (data.error) {
+                    throw new Error(data.error);
+                }
                 // Filter only available products (stock > 0)
                 const availableProducts = data.filter(product => product.stock > 0);
+                console.log('Available products:', availableProducts.length);
                 products = availableProducts;
                 displayProducts(products);
             })
@@ -344,18 +374,22 @@
                         <i class="bi bi-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
                         <p class="text-danger mt-2">خطأ في تحميل المنتجات: ${error.message}</p>
                         <button class="btn btn-outline-primary" onclick="loadProducts()">إعادة المحاولة</button>
+                        <br><br>
+                        <small class="text-muted">تأكد من تسجيل الدخول وإعادة تحميل الصفحة</small>
                     </div>
                 `;
             });
     }
 
     function displayProducts(productsToShow) {
+        console.log('Displaying products:', productsToShow.length);
         const productsList = document.getElementById('productsList');
         const template = document.getElementById('productCardTemplate');
 
         productsList.innerHTML = '';
 
         if (productsToShow.length === 0) {
+            console.log('No products to show');
             productsList.innerHTML = `
             <div class="col-12 text-center py-4">
                 <i class="bi bi-search text-muted" style="font-size: 3rem;"></i>
@@ -365,7 +399,8 @@
             return;
         }
 
-        productsToShow.forEach(product => {
+        productsToShow.forEach((product, index) => {
+            console.log(`Processing product ${index + 1}:`, product);
             const clone = template.content.cloneNode(true);
 
             clone.querySelector('.product-name').textContent = product.name;
@@ -389,6 +424,7 @@
 
             productsList.appendChild(clone);
         });
+        console.log('Products displayed successfully');
     }
 
     function searchProducts() {
@@ -900,7 +936,7 @@
             })
             .catch(error => {
                 console.error('Error adding customer:', error);
-                 أثناء إضافة العميل');
+                alert('حدث خطأ أثناء إضافة العميل');
             });
     }
 </script>

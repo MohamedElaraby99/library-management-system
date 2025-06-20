@@ -288,7 +288,9 @@
             total += item.total_price;
         });
 
-        const saleDate = new Date(sale.sale_date);
+        // استخدام التاريخ والوقت المرسل من الخادم مباشرة
+        const saleDate = sale.sale_date;
+        const saleTime = sale.sale_time;
         const userBadge = sale.user_role === 'admin' ?
             '<span class="badge bg-warning text-dark">مدير</span>' :
             '<span class="badge bg-info">بائع</span>';
@@ -312,14 +314,14 @@
                                     <p class="mb-2">
                                         <i class="bi bi-calendar3 text-success me-2"></i>
                                         <strong>التاريخ:</strong> 
-                                        ${saleDate.toLocaleDateString('ar-EG')}
+                                        ${saleDate}
                                     </p>
                                 </div>
                                 <div class="col-6">
                                     <p class="mb-2">
                                         <i class="bi bi-clock text-warning me-2"></i>
                                         <strong>الوقت:</strong> 
-                                        ${saleDate.toLocaleTimeString('ar-EG')}
+                                        ${saleTime}
                                     </p>
                                     <p class="mb-2">
                                         <i class="bi bi-person text-info me-2"></i>
@@ -720,7 +722,9 @@
             total += item.total_price;
         });
 
-        const saleDate = new Date(sale.sale_date);
+        // استخدام التاريخ والوقت المرسل من الخادم مباشرة
+        const saleDate = sale.sale_date;
+        const saleTime = sale.sale_time;
         const userBadge = sale.user_role === 'admin' ?
             '<span style="background: #ffc107; color: #212529; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">مدير</span>' :
             '<span style="background: #17a2b8; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">بائع</span>';
@@ -730,8 +734,8 @@
             <div class="invoice-details">
                 <h3>📋 معلومات الفاتورة</h3>
                 <p><span class="label">رقم البيع:</span> <span class="value" style="color: #667eea; font-weight: 700;">#${sale.id}</span></p>
-                <p><span class="label">التاريخ:</span> <span class="value">${saleDate.toLocaleDateString('ar-EG')}</span></p>
-                <p><span class="label">الوقت:</span> <span class="value">${saleDate.toLocaleTimeString('ar-EG')}</span></p>
+                <p><span class="label">التاريخ:</span> <span class="value">${saleDate}</span></p>
+                <p><span class="label">الوقت:</span> <span class="value">${saleTime}</span></p>
                 <p><span class="label">البائع:</span> <span class="value">${sale.user_name} ${userBadge}</span></p>
             </div>
             <div class="invoice-details">
