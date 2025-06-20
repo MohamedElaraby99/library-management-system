@@ -369,7 +369,7 @@
             const clone = template.content.cloneNode(true);
 
             clone.querySelector('.product-name').textContent = product.name;
-            clone.querySelector('.product-price').textContent = product.price.toFixed(2) + ' ج.م';
+            clone.querySelector('.product-price').textContent = (product.retail_price || product.price || 0).toFixed(2) + ' ج.م';
             clone.querySelector('.product-stock').textContent = `المخزون: ${product.stock} ${product.unit_type}`;
 
             const quantityInput = clone.querySelector('.quantity-input');
@@ -434,8 +434,8 @@
                 product_id: productId,
                 name: product.name,
                 quantity: quantity,
-                unit_price: product.price,
-                total_price: quantity * product.price
+                unit_price: product.retail_price || product.price || 0,
+                total_price: quantity * (product.retail_price || product.price || 0)
             });
         }
 
@@ -900,7 +900,7 @@
             })
             .catch(error => {
                 console.error('Error adding customer:', error);
-                alert('حدث خطأ أثناء إضافة العميل');
+                 أثناء إضافة العميل');
             });
     }
 </script>

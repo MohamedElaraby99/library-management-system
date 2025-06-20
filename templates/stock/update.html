@@ -281,7 +281,7 @@
             clone.querySelector('.product-category').textContent = product.category;
             clone.querySelector('.product-stock').textContent = product.stock;
             clone.querySelector('.product-unit').textContent = product.unit_type || 'وحدة';
-            clone.querySelector('.product-price').textContent = product.price + ' ج.م';
+            clone.querySelector('.product-price').textContent = (product.retail_price || product.price || 0) + ' ج.م';
 
             const badge = clone.querySelector('.stock-status');
             const progressBar = clone.querySelector('.stock-progress');

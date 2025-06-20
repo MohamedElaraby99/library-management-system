@@ -104,7 +104,12 @@ def seller_or_admin_required(f):
 
 def format_currency(amount):
     """Format currency for Egyptian Pounds"""
-    return f"{amount:.2f} ج.م"
+    if amount is None:
+        return "غير محدد"
+    try:
+        return f"{float(amount):.2f} ج.م"
+    except (ValueError, TypeError):
+        return "غير محدد"
 
 def format_date(date):
     """تنسيق التاريخ بالعربية"""
@@ -544,23 +549,98 @@ def dashboard():
 @login_required
 @admin_required
 def products():
-    page = request.args.get('page', 1, type=int)
     search = request.args.get('search', '', type=str)
     category_id = request.args.get('category', 0, type=int)
+    stock_status = request.args.get('stock_status', '', type=str)
+    min_price = request.args.get('min_price', type=float)
+    max_price = request.args.get('max_price', type=float)
+    unit_type = request.args.get('unit_type', '', type=str)
+    sort_by = request.args.get('sort_by', 'name', type=str)
     
     query = Product.query
     
+    # تطبيق فلاتر البحث
     if search:
-        query = query.filter(Product.name_ar.contains(search))
+        query = query.filter(
+            Product.name_ar.contains(search) | 
+            Product.description_ar.contains(search)
+        )
     
     if category_id:
         query = query.filter(Product.category_id == category_id)
     
-    products = query.order_by(desc(Product.created_at)).paginate(
-        page=page, per_page=10, error_out=False)
+    if stock_status:
+        if stock_status == 'available':
+            query = query.filter(Product.stock_quantity > Product.min_stock_threshold)
+        elif stock_status == 'low':
+            query = query.filter(
+                Product.stock_quantity <= Product.min_stock_threshold,
+                Product.stock_quantity > 0
+            )
+        elif stock_status == 'out':
+            query = query.filter(Product.stock_quantity <= 0)
     
+    if min_price is not None:
+        query = query.filter(Product.retail_price >= min_price)
+    
+    if max_price is not None:
+        query = query.filter(Product.retail_price <= max_price)
+    
+    if unit_type:
+        query = query.filter(Product.unit_type == unit_type)
+    
+    # ترتيب النتائج
+    if sort_by == 'name':
+        query = query.order_by(Product.name_ar)
+    elif sort_by == 'price':
+        query = query.order_by(desc(Product.retail_price))
+    elif sort_by == 'stock':
+        query = query.order_by(desc(Product.stock_quantity))
+    elif sort_by == 'date':
+        query = query.order_by(desc(Product.created_at))
+    else:
+        query = query.order_by(Product.name_ar)
+    
+    # الحصول على جميع المنتجات (بدون تقسيم)
+    products = query.all()
     categories = Category.query.all()
-    return render_template('products/list.html', products=products, categories=categories)
+    
+    # حساب الإحصائيات
+    total_wholesale_value = 0
+    total_retail_value = 0
+    total_profit = 0
+    total_products_count = len(products)
+    total_stock_quantity = 0
+    
+    for product in products:
+        wholesale_price = product.wholesale_price or 0
+        retail_price = product.retail_price or product.price or 0
+        stock_quantity = product.stock_quantity or 0
+        
+        total_wholesale_value += wholesale_price * stock_quantity
+        total_retail_value += retail_price * stock_quantity
+        total_profit += (retail_price - wholesale_price) * stock_quantity
+        total_stock_quantity += stock_quantity
+    
+    # إحصائيات إضافية
+    low_stock_count = sum(1 for p in products if p.is_low_stock)
+    out_of_stock_count = sum(1 for p in products if p.is_out_of_stock)
+    
+    product_stats = {
+        'total_products_count': total_products_count,
+        'total_wholesale_value': total_wholesale_value,
+        'total_retail_value': total_retail_value,
+        'total_profit': total_profit,
+        'total_stock_quantity': total_stock_quantity,
+        'low_stock_count': low_stock_count,
+        'out_of_stock_count': out_of_stock_count,
+        'profit_margin_percentage': (total_profit / total_wholesale_value * 100) if total_wholesale_value > 0 else 0
+    }
+    
+    return render_template('products/list.html', 
+                         products=products, 
+                         categories=categories,
+                         product_stats=product_stats)
 
 @app.route('/products/add', methods=['GET', 'POST'])
 @login_required
@@ -1191,7 +1271,7 @@ def api_export_products():
         'id': p.id,
         'name': p.name_ar,
         'category': p.category.name_ar if p.category else 'غير محدد',
-        'price': float(p.price),
+        'price': float(p.retail_price or p.price or 0),
         'stock': float(p.stock_quantity),
         'unit_type': p.unit_type,
         'is_whole_unit': p.is_whole_unit,

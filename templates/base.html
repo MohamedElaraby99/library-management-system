@@ -454,7 +454,7 @@
 
     <!-- Mobile dropdown fix -->
     <script>
-        nt.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', function () {
             // Initialize all dropdowns
             var dropdownElementList = [].slice.call(document.querySelectorAll('.dropdown-toggle'));
             var dropdownList = dropdownElementList.map(function (dropdownToggleEl) {
@@ -480,7 +480,7 @@
 
     <!-- Universal Modal Fix -->
     <script>
-        nt.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', function () {
             // حل شامل لجميع الـ modals في النظام
             function initializeModals() {
                 const modals = document.querySelectorAll('.modal');

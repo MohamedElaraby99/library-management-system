@@ -4,160 +4,154 @@
 
 {% block content %}
 <div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-0">
+                <i class="bi bi-box-seam text-primary"></i>
+                إدارة المنتجات
+            </h2>
+            <p class="text-muted mb-0">عرض وإدارة جميع المنتجات</p>
+        </div>
+        {% if current_user.is_admin() %}
+        <div>
+            <a href="{{ url_for('add_product') }}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> إضافة منتج جديد
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Product Statistics -->
     <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h1 class="h3 mb-3">
-                        <i class="bi bi-box-seam"></i>
-                        إدارة المنتجات
-                    </h1>
-                    <p class="text-muted">عرض وإدارة جميع المنتجات في المخزون</p>
+        <div class="col-md-2">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <i class="bi bi-box display-4 mb-2"></i>
+                    <h3 class="mb-0">{{ product_stats.total_products_count }}</h3>
+                    <small>إجمالي المنتجات</small>
                 </div>
-                {% if current_user.is_admin() %}
-                <div>
-                    <a href="{{ url_for('add_product') }}" class="btn btn-primary">
-                        <i class="bi bi-plus-circle"></i>
-                        إضافة منتج جديد
-                    </a>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <i class="bi bi-currency-dollar display-4 mb-2"></i>
+                    <h5 class="mb-0">{{ product_stats.total_retail_value|currency }}</h5>
+                    <small>قيمة البيع الإجمالية</small>
                 </div>
-                {% endif %}
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-warning text-white">
+                <div class="card-body text-center">
+                    <i class="bi bi-cash display-4 mb-2"></i>
+                    <h5 class="mb-0">{{ product_stats.total_wholesale_value|currency }}</h5>
+                    <small>قيمة الشراء الإجمالية</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <i class="bi bi-graph-up display-4 mb-2"></i>
+                    <h5 class="mb-0">{{ product_stats.total_profit|currency }}</h5>
+                    <small>الربح المتوقع</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                    <i class="bi bi-exclamation-triangle display-4 mb-2"></i>
+                    <h3 class="mb-0">{{ product_stats.low_stock_count }}</h3>
+                    <small>مخزون منخفض</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-dark text-white">
+                <div class="card-body text-center">
+                    <i class="bi bi-x-circle display-4 mb-2"></i>
+                    <h3 class="mb-0">{{ product_stats.out_of_stock_count }}</h3>
+                    <small>نفد المخزون</small>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Advanced Search and Filter Section -->
-    <div class="search-section mb-4">
-        <div class="card">
-            <div class="card-header bg-gradient-primary text-white">
-                <div class="d-flex align-items-center justify-content-between">
-                    <h6 class="mb-0">
-                        <i class="bi bi-funnel"></i>
-                        البحث المتقدم والفلاتر
-                    </h6>
-                    <button type="button" class="btn btn-sm btn-outline-light" data-bs-toggle="collapse"
-                        data-bs-target="#advancedFilters" aria-expanded="false">
-                        <i class="bi bi-chevron-down"></i>
-                    </button>
+    <!-- Search and Filters -->
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">
+                <i class="bi bi-funnel"></i>
+                البحث والفلاتر
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">البحث السريع</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" id="quickSearch" class="form-control" 
+                               placeholder="ابحث في اسم المنتج أو الوصف..." 
+                               value="{{ request.args.get('search', '') }}">
+                        <button type="button" id="clearSearch" class="btn btn-outline-secondary">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">الفئة</label>
+                    <select id="categoryFilter" class="form-select">
+                        <option value="">جميع الفئات</option>
+                        {% for category in categories %}
+                        <option value="{{ category.id }}" {% if request.args.get('category', '', type=int)==category.id %}selected{% endif %}>
+                            {{ category.name_ar }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">حالة المخزون</label>
+                    <select id="stockFilter" class="form-select">
+                        <option value="">جميع الحالات</option>
+                        <option value="available" {% if request.args.get('stock_status')=='available' %}selected{% endif %}>متوفر</option>
+                        <option value="low" {% if request.args.get('stock_status')=='low' %}selected{% endif %}>منخفض</option>
+                        <option value="out" {% if request.args.get('stock_status')=='out' %}selected{% endif %}>نفد</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">نوع الوحدة</label>
+                    <select id="unitFilter" class="form-select">
+                        <option value="">جميع الأنواع</option>
+                        <option value="كامل" {% if request.args.get('unit_type')=='كامل' %}selected{% endif %}>كامل</option>
+                        <option value="جزئي" {% if request.args.get('unit_type')=='جزئي' %}selected{% endif %}>جزئي</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">ترتيب حسب</label>
+                    <select id="sortFilter" class="form-select">
+                        <option value="name" {% if request.args.get('sort_by')=='name' %}selected{% endif %}>الاسم</option>
+                        <option value="price" {% if request.args.get('sort_by')=='price' %}selected{% endif %}>السعر</option>
+                        <option value="stock" {% if request.args.get('sort_by')=='stock' %}selected{% endif %}>المخزون</option>
+                        <option value="date" {% if request.args.get('sort_by')=='date' %}selected{% endif %}>التاريخ</option>
+                    </select>
                 </div>
             </div>
-            <div class="card-body">
-                <!-- Quick Search Bar -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="search-container position-relative">
-                            <input type="text" id="quickSearch" class="form-control form-control-lg"
-                                placeholder="🔍 ابحث عن أي منتج... (اكتب لبدء البحث الفوري)" autocomplete="off">
-                            <div id="searchResults"
-                                class="search-results position-absolute w-100 bg-white border rounded shadow-lg"
-                                style="display: none; z-index: 1000; max-height: 300px; overflow-y: auto;"></div>
+            <div class="row mt-3">
+                <div class="col-md-12">
+                    <div class="d-flex gap-2">
+                        <button type="button" id="resetFilters" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-clockwise"></i> إعادة تعيين
+                        </button>
+                        <div class="ms-auto">
+                            <span id="resultsCount" class="badge bg-secondary fs-6">
+                                {{ products|length }} منتج
+                            </span>
                         </div>
                     </div>
-                </div>
-
-                <!-- Quick Filter Buttons -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="d-flex flex-wrap gap-2">
-                            <button type="button" class="btn btn-outline-success filter-btn" data-filter="available">
-                                <i class="bi bi-check-circle"></i> متوفر
-                            </button>
-                            <button type="button" class="btn btn-outline-warning filter-btn" data-filter="low-stock">
-                                <i class="bi bi-exclamation-triangle"></i> مخزون منخفض
-                            </button>
-                            <button type="button" class="btn btn-outline-danger filter-btn" data-filter="out-of-stock">
-                                <i class="bi bi-x-circle"></i> نفد المخزون
-                            </button>
-                            <button type="button" class="btn btn-outline-info filter-btn" data-filter="full-units">
-                                <i class="bi bi-box"></i> وحدات كاملة
-                            </button>
-                            <button type="button" class="btn btn-outline-warning filter-btn"
-                                data-filter="partial-units">
-                                <i class="bi bi-pie-chart"></i> وحدات جزئية
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary" id="clearFilters">
-                                <i class="bi bi-arrow-clockwise"></i> مسح الفلاتر
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Advanced Filters (Collapsible) -->
-                <div class="collapse" id="advancedFilters">
-                    <form method="GET" class="row g-3 border-top pt-3">
-                        <div class="col-md-4">
-                            <label class="form-label">البحث النصي</label>
-                            <input type="text" name="search" class="form-control" placeholder="ابحث بالاسم أو الوصف..."
-                                value="{{ request.args.get('search', '') }}">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">الفئة</label>
-                            <select name="category" class="form-select">
-                                <option value="">جميع الفئات</option>
-                                {% for category in categories %}
-                                <option value="{{ category.id }}" {% if request.args.get('category', '' ,
-                                    type=int)==category.id %}selected{% endif %}>
-                                    {{ category.name_ar }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">حالة المخزون</label>
-                            <select name="stock_status" class="form-select">
-                                <option value="">جميع الحالات</option>
-                                <option value="available" {% if request.args.get('stock_status')=='available'
-                                    %}selected{% endif %}>متوفر</option>
-                                <option value="low" {% if request.args.get('stock_status')=='low' %}selected{% endif %}>
-                                    منخفض</option>
-                                <option value="out" {% if request.args.get('stock_status')=='out' %}selected{% endif %}>
-                                    نفد</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">نطاق السعر</label>
-                            <div class="input-group">
-                                <input type="number" name="min_price" class="form-control" placeholder="من"
-                                    value="{{ request.args.get('min_price', '') }}" step="0.01">
-                                <span class="input-group-text">-</span>
-                                <input type="number" name="max_price" class="form-control" placeholder="إلى"
-                                    value="{{ request.args.get('max_price', '') }}" step="0.01">
-                            </div>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">نوع الوحدة</label>
-                            <select name="unit_type" class="form-select">
-                                <option value="">جميع الأنواع</option>
-                                <option value="كامل" {% if request.args.get('unit_type')=='كامل' %}selected{% endif %}>
-                                    كامل</option>
-                                <option value="جزئي" {% if request.args.get('unit_type')=='جزئي' %}selected{% endif %}>
-                                    جزئي</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">ترتيب حسب</label>
-                            <select name="sort_by" class="form-select">
-                                <option value="name" {% if request.args.get('sort_by')=='name' %}selected{% endif %}>
-                                    الاسم</option>
-                                <option value="price" {% if request.args.get('sort_by')=='price' %}selected{% endif %}>
-                                    السعر</option>
-                                <option value="stock" {% if request.args.get('sort_by')=='stock' %}selected{% endif %}>
-                                    المخزون</option>
-                                <option value="date" {% if request.args.get('sort_by')=='date' %}selected{% endif %}>
-                                    التاريخ</option>
-                            </select>
-                        </div>
-                        <div class="col-md-12">
-                            <div class="d-flex gap-2">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="bi bi-search"></i> تطبيق الفلاتر
-                                </button>
-                                <a href="{{ url_for('products') }}" class="btn btn-outline-secondary">
-                                    <i class="bi bi-arrow-clockwise"></i> إعادة تعيين
-                                </a>
-                            </div>
-                        </div>
-                    </form>
                 </div>
             </div>
         </div>
@@ -169,18 +163,17 @@
             <h5 class="card-title mb-0">
                 <i class="bi bi-list-ul"></i>
                 قائمة المنتجات
-                <span class="badge bg-secondary ms-2">{{ products.total }} منتج</span>
             </h5>
         </div>
         <div class="card-body p-0">
-            {% if products.items %}
+            {% if products %}
             <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead>
+                <table class="table table-hover mb-0" id="productsTable">
+                    <thead class="table-light">
                         <tr>
                             <th>اسم المنتج</th>
                             <th>الفئة</th>
-                            <th>السعر</th>
+                            <th>الأسعار</th>
                             <th>المخزون</th>
                             <th>نوع الوحدة</th>
                             <th>الحالة</th>
@@ -191,28 +184,48 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for product in products.items %}
-                        <tr>
+                        {% for product in products %}
+                        <tr class="product-row" 
+                            data-name="{{ product.name_ar|lower }}"
+                            data-description="{{ (product.description_ar or '')|lower }}"
+                            data-category="{{ product.category_id }}"
+                            data-stock-status="{% if product.is_out_of_stock %}out{% elif product.is_low_stock %}low{% else %}available{% endif %}"
+                            data-unit-type="{{ product.unit_type }}"
+                            data-price="{{ product.retail_price or 0 }}"
+                            data-stock="{{ product.stock_quantity }}"
+                            data-date="{{ product.created_at.strftime('%Y-%m-%d') }}">
                             <td>
                                 <strong>{{ product.name_ar }}</strong>
                                 {% if product.description_ar %}
-                                <br><small class="text-muted">{{ product.description_ar[:50] }}{% if
-                                    product.description_ar|length > 50 %}...{% endif %}</small>
+                                <br><small class="text-muted">{{ product.description_ar[:50] }}{% if product.description_ar|length > 50 %}...{% endif %}</small>
                                 {% endif %}
                             </td>
                             <td>{{ product.category.name_ar }}</td>
-                            <td class="currency">{{ product.price|currency }}</td>
+                            <td>
+                                <div class="price-info">
+                                    <div class="retail-price">
+                                        <strong class="text-success">{{ product.retail_price|currency }}</strong>
+                                        <small class="text-muted d-block">سعر البيع</small>
+                                    </div>
+                                    <div class="wholesale-price mt-1">
+                                        <span class="text-warning">{{ product.wholesale_price|currency }}</span>
+                                        <small class="text-muted d-block">سعر الجملة</small>
+                                    </div>
+                                    <div class="profit-margin mt-1">
+                                        <span class="badge bg-info">{{ product.profit_margin|currency }}</span>
+                                        <small class="text-muted d-block">الربح/وحدة</small>
+                                    </div>
+                                </div>
+                            </td>
                             <td>
                                 <div class="d-flex align-items-center">
                                     <div class="flex-grow-1">
                                         <div class="d-flex align-items-center">
                                             <strong class="me-2">{{ product.stock_quantity }}</strong>
                                             {% if product.is_out_of_stock %}
-                                            <i class="bi bi-exclamation-triangle-fill text-danger"
-                                                title="نفد المخزون"></i>
+                                            <i class="bi bi-exclamation-triangle-fill text-danger" title="نفد المخزون"></i>
                                             {% elif product.is_low_stock %}
-                                            <i class="bi bi-exclamation-circle-fill text-warning"
-                                                title="مخزون منخفض"></i>
+                                            <i class="bi bi-exclamation-circle-fill text-warning" title="مخزون منخفض"></i>
                                             {% else %}
                                             <i class="bi bi-check-circle-fill text-success" title="متوفر"></i>
                                             {% endif %}
@@ -220,64 +233,38 @@
                                         {% if product.unit_description %}
                                         <small class="text-muted">{{ product.unit_description }}</small>
                                         {% endif %}
-                                        <div class="progress mt-1" style="height: 4px;">
-                                            {% set stock_percentage = (product.stock_quantity /
-                                            (product.min_stock_threshold * 3)) * 100 %}
-                                            {% if stock_percentage > 100 %}{% set stock_percentage = 100 %}{% endif %}
-                                            <div class="progress-bar 
-                                                {% if product.is_out_of_stock %}bg-danger
-                                                {% elif product.is_low_stock %}bg-warning
-                                                {% else %}bg-success{% endif %}"
-                                                style="width: {{ stock_percentage }}%"></div>
-                                        </div>
                                     </div>
                                 </div>
                             </td>
                             <td>
-                                <span
-                                    class="badge rounded-pill {% if product.unit_type == 'كامل' %}bg-info{% else %}bg-secondary{% endif %}">
-                                    <i
-                                        class="bi {% if product.unit_type == 'كامل' %}bi-box{% else %}bi-pie-chart{% endif %} me-1"></i>
+                                <span class="badge rounded-pill {% if product.unit_type == 'كامل' %}bg-info{% else %}bg-secondary{% endif %}">
+                                    <i class="bi {% if product.unit_type == 'كامل' %}bi-box{% else %}bi-pie-chart{% endif %} me-1"></i>
                                     {{ product.unit_type }}
                                 </span>
                             </td>
                             <td>
                                 {% if product.is_out_of_stock %}
-                                <div class="d-flex align-items-center">
-                                    <span class="badge bg-danger me-2">
-                                        <i class="bi bi-x-circle me-1"></i>نفد المخزون
-                                    </span>
-                                    <div class="status-indicator bg-danger rounded-circle"
-                                        style="width: 8px; height: 8px;" title="تحتاج إعادة تموين فوري"></div>
-                                </div>
+                                <span class="badge bg-danger">
+                                    <i class="bi bi-x-circle me-1"></i>نفد المخزون
+                                </span>
                                 {% elif product.is_low_stock %}
-                                <div class="d-flex align-items-center">
-                                    <span class="badge bg-warning text-dark me-2">
-                                        <i class="bi bi-exclamation-triangle me-1"></i>مخزون منخفض
-                                    </span>
-                                    <div class="status-indicator bg-warning rounded-circle"
-                                        style="width: 8px; height: 8px;" title="يحتاج إعادة تموين قريباً"></div>
-                                </div>
+                                <span class="badge bg-warning text-dark">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>مخزون منخفض
+                                </span>
                                 {% else %}
-                                <div class="d-flex align-items-center">
-                                    <span class="badge bg-success me-2">
-                                        <i class="bi bi-check-circle me-1"></i>متوفر
-                                    </span>
-                                    <div class="status-indicator bg-success rounded-circle"
-                                        style="width: 8px; height: 8px;" title="مخزون كافي"></div>
-                                </div>
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle me-1"></i>متوفر
+                                </span>
                                 {% endif %}
                             </td>
                             <td>{{ product.created_at|arabic_date }}</td>
                             {% if current_user.is_admin() %}
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
-                                    <a href="{{ url_for('edit_product', id=product.id) }}"
-                                        class="btn btn-outline-primary" title="تعديل">
+                                    <a href="{{ url_for('edit_product', id=product.id) }}" class="btn btn-outline-primary" title="تعديل">
                                         <i class="bi bi-pencil"></i>
                                     </a>
-                                    <button type="button" class="btn btn-outline-danger"
-                                        onclick="deleteProduct({{ product.id }})" title="حذف">
+                                    <button type="button" class="btn btn-outline-danger" onclick="deleteProduct({{ product.id }})" title="حذف">
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </div>
@@ -288,59 +275,14 @@
                     </tbody>
                 </table>
             </div>
-
-            <!-- Pagination -->
-            {% if products.pages > 1 %}
-            <div class="card-footer bg-white">
-                <nav aria-label="صفحات المنتجات">
-                    <ul class="pagination pagination-sm justify-content-center mb-0">
-                        {% if products.has_prev %}
-                        <li class="page-item">
-                            <a class="page-link"
-                                href="{{ url_for('products', page=products.prev_num, search=request.args.get('search', ''), category=request.args.get('category', '')) }}">السابق</a>
-                        </li>
-                        {% endif %}
-
-                        {% for page_num in products.iter_pages() %}
-                        {% if page_num %}
-                        {% if page_num != products.page %}
-                        <li class="page-item">
-                            <a class="page-link"
-                                href="{{ url_for('products', page=page_num, search=request.args.get('search', ''), category=request.args.get('category', '')) }}">{{
-                                page_num }}</a>
-                        </li>
-                        {% else %}
-                        <li class="page-item active">
-                            <span class="page-link">{{ page_num }}</span>
-                        </li>
-                        {% endif %}
-                        {% else %}
-                        <li class="page-item disabled">
-                            <span class="page-link">...</span>
-                        </li>
-                        {% endif %}
-                        {% endfor %}
-
-                        {% if products.has_next %}
-                        <li class="page-item">
-                            <a class="page-link"
-                                href="{{ url_for('products', page=products.next_num, search=request.args.get('search', ''), category=request.args.get('category', '')) }}">التالي</a>
-                        </li>
-                        {% endif %}
-                    </ul>
-                </nav>
-            </div>
-            {% endif %}
-
             {% else %}
             <div class="text-center py-5">
-                <i class="bi bi-box text-muted" style="font-size: 4rem;"></i>
-                <h4 class="text-muted mt-3">لا توجد منتجات</h4>
+                <i class="bi bi-box display-1 text-muted"></i>
+                <h4 class="mt-3">لا توجد منتجات</h4>
                 <p class="text-muted">لم يتم العثور على أي منتجات تطابق معايير البحث</p>
                 {% if current_user.is_admin() %}
                 <a href="{{ url_for('add_product') }}" class="btn btn-primary">
-                    <i class="bi bi-plus-circle"></i>
-                    إضافة المنتج الأول
+                    <i class="bi bi-plus-circle"></i> إضافة منتج جديد
                 </a>
                 {% endif %}
             </div>
@@ -349,224 +291,184 @@
     </div>
 </div>
 
-<!-- Delete Confirmation Modal -->
-<div class="modal fade" id="deleteModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">تأكيد الحذف</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                هل أنت متأكد من رغبتك في حذف هذا المنتج؟ لن يمكن التراجع عن هذا الإجراء.
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                <form id="deleteForm" method="POST" style="display: inline;">
-                    <button type="submit" class="btn btn-danger">حذف</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block extra_js %}
+<!-- JavaScript for instant search and filtering -->
 <script>
-    let searchTimeout;
-    let currentFilters = [];
+document.addEventListener('DOMContentLoaded', function() {
+    const quickSearch = document.getElementById('quickSearch');
+    const categoryFilter = document.getElementById('categoryFilter');
+    const stockFilter = document.getElementById('stockFilter');
+    const unitFilter = document.getElementById('unitFilter');
+    const sortFilter = document.getElementById('sortFilter');
+    const clearSearch = document.getElementById('clearSearch');
+    const resetFilters = document.getElementById('resetFilters');
+    const resultsCount = document.getElementById('resultsCount');
+    const productRows = document.querySelectorAll('.product-row');
 
-    // Quick search functionality
-    document.getElementById('quickSearch').addEventListener('input', function (e) {
-        clearTimeout(searchTimeout);
-        const query = e.target.value.trim();
-
-        if (query.length >= 2) {
-            searchTimeout = setTimeout(() => {
-                performQuickSearch(query);
-            }, 300);
-        } else {
-            document.getElementById('searchResults').style.display = 'none';
-        }
-    });
-
-    function performQuickSearch(query) {
-        fetch(`/api/products?search=${encodeURIComponent(query)}`)
-            .then(response => response.json())
-            .then(data => {
-                displaySearchResults(data);
-            })
-            .catch(error => {
-                console.error('Error performing quick search:', error);
-            });
-    }
-
-    function displaySearchResults(products) {
-        const resultsContainer = document.getElementById('searchResults');
-
-        if (products.length === 0) {
-            resultsContainer.innerHTML = `
-                <div class="p-3 text-center">
-                    <i class="bi bi-search text-muted" style="font-size: 2rem;"></i>
-                    <p class="text-muted mt-2 mb-0">لا توجد نتائج</p>
-                </div>
-            `;
-        } else {
-            resultsContainer.innerHTML = products.slice(0, 5).map(product => `
-                <div class="search-result-item p-3 border-bottom" style="cursor: pointer;" onclick="selectProduct(${product.id})">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="mb-1">${product.name}</h6>
-                            <small class="text-muted">${product.price} ج.م - المخزون: ${product.stock}</small>
-                        </div>
-                        <div class="text-end">
-                            <span class="badge ${getStockBadgeClass(product)}">
-                                ${getStockStatus(product)}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        resultsContainer.style.display = 'block';
-    }
-
-    function getStockBadgeClass(product) {
-        if (product.stock <= 0) return 'bg-danger';
-        if (product.stock <= product.min_stock_threshold) return 'bg-warning text-dark';
-        return 'bg-success';
-    }
-
-    function getStockStatus(product) {
-        if (product.stock <= 0) return 'نفد';
-        if (product.stock <= product.min_stock_threshold) return 'منخفض';
-        return 'متوفر';
-    }
-
-    function selectProduct(productId) {
-        window.location.href = `/products/${productId}/edit`;
-    }
-
-    // Hide search results when clicking outside
-    document.addEventListener('click', function (e) {
-        if (!e.target.closest('.search-container')) {
-            document.getElementById('searchResults').style.display = 'none';
-        }
-    });
-
-    // Filter buttons functionality
-    document.querySelectorAll('.filter-btn').forEach(button => {
-        button.addEventListener('click', function () {
-            const filter = this.dataset.filter;
-
-            if (this.classList.contains('active')) {
-                // Remove filter
-                this.classList.remove('active');
-                currentFilters = currentFilters.filter(f => f !== filter);
-            } else {
-                // Add filter
-                this.classList.add('active');
-                currentFilters.push(filter);
+    // Instant search function
+    function filterProducts() {
+        const searchTerm = quickSearch.value.toLowerCase();
+        const categoryValue = categoryFilter.value;
+        const stockValue = stockFilter.value;
+        const unitValue = unitFilter.value;
+        
+        let visibleCount = 0;
+        
+        productRows.forEach(row => {
+            const name = row.dataset.name;
+            const description = row.dataset.description;
+            const category = row.dataset.category;
+            const stockStatus = row.dataset.stockStatus;
+            const unitType = row.dataset.unitType;
+            
+            let show = true;
+            
+            // Search filter
+            if (searchTerm && !name.includes(searchTerm) && !description.includes(searchTerm)) {
+                show = false;
             }
-
-            applyFilters();
+            
+            // Category filter
+            if (categoryValue && category !== categoryValue) {
+                show = false;
+            }
+            
+            // Stock status filter
+            if (stockValue && stockStatus !== stockValue) {
+                show = false;
+            }
+            
+            // Unit type filter
+            if (unitValue && unitType !== unitValue) {
+                show = false;
+            }
+            
+            if (show) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
         });
+        
+        resultsCount.textContent = visibleCount + ' منتج';
+    }
+
+    // Sort function
+    function sortProducts() {
+        const sortBy = sortFilter.value;
+        const tbody = document.querySelector('#productsTable tbody');
+        const rows = Array.from(tbody.querySelectorAll('.product-row'));
+        
+        rows.sort((a, b) => {
+            let aValue, bValue;
+            
+            switch(sortBy) {
+                case 'name':
+                    aValue = a.dataset.name;
+                    bValue = b.dataset.name;
+                    return aValue.localeCompare(bValue, 'ar');
+                case 'price':
+                    aValue = parseFloat(a.dataset.price);
+                    bValue = parseFloat(b.dataset.price);
+                    return bValue - aValue;
+                case 'stock':
+                    aValue = parseInt(a.dataset.stock);
+                    bValue = parseInt(b.dataset.stock);
+                    return bValue - aValue;
+                case 'date':
+                    aValue = new Date(a.dataset.date);
+                    bValue = new Date(b.dataset.date);
+                    return bValue - aValue;
+                default:
+                    return 0;
+            }
+        });
+        
+        rows.forEach(row => tbody.appendChild(row));
+    }
+
+    // Event listeners
+    quickSearch.addEventListener('input', filterProducts);
+    categoryFilter.addEventListener('change', filterProducts);
+    stockFilter.addEventListener('change', filterProducts);
+    unitFilter.addEventListener('change', filterProducts);
+    sortFilter.addEventListener('change', function() {
+        sortProducts();
+        filterProducts();
     });
 
-    function applyFilters() {
-        const rows = document.querySelectorAll('tbody tr');
-
-        rows.forEach(row => {
-            let shouldShow = true;
-
-            currentFilters.forEach(filter => {
-                switch (filter) {
-                    case 'available':
-                        if (!row.querySelector('.badge.bg-success')) {
-                            shouldShow = false;
-                        }
-                        break;
-                    case 'low-stock':
-                        if (!row.querySelector('.badge.bg-warning')) {
-                            shouldShow = false;
-                        }
-                        break;
-                    case 'out-of-stock':
-                        if (!row.querySelector('.badge.bg-danger')) {
-                            shouldShow = false;
-                        }
-                        break;
-                    case 'full-units':
-                        if (!row.querySelector('.badge.bg-info')) {
-                            shouldShow = false;
-                        }
-                        break;
-                    case 'partial-units':
-                        if (!row.querySelector('.badge.bg-secondary')) {
-                            shouldShow = false;
-                        }
-                        break;
-                }
-            });
-
-            row.style.display = shouldShow ? '' : 'none';
-        });
-
-        updateResultsCount();
-    }
-
-    function updateResultsCount() {
-        const visibleRows = document.querySelectorAll('tbody tr[style=""], tbody tr:not([style])');
-        const countBadge = document.querySelector('.badge.bg-secondary');
-        if (countBadge) {
-            countBadge.textContent = `${visibleRows.length} منتج`;
-        }
-    }
-
-    // Clear filters
-    document.getElementById('clearFilters').addEventListener('click', function () {
-        currentFilters = [];
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        applyFilters();
+    clearSearch.addEventListener('click', function() {
+        quickSearch.value = '';
+        filterProducts();
     });
 
-    // Add CSS for active filter buttons
-    const style = document.createElement('style');
-    style.textContent = `
-        .filter-btn.active {
-            background-color: var(--bs-primary) !important;
-            color: white !important;
-            border-color: var(--bs-primary) !important;
-        }
-        
-        .search-result-item:hover {
-            background-color: #f8f9fa;
-        }
-        
-        .status-indicator {
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-        
-        .bg-gradient-primary {
-            background: linear-gradient(45deg, #0d6efd, #0b5ed7) !important;
-        }
-    `;
-    document.head.appendChild(style);
+    resetFilters.addEventListener('click', function() {
+        quickSearch.value = '';
+        categoryFilter.value = '';
+        stockFilter.value = '';
+        unitFilter.value = '';
+        sortFilter.value = 'name';
+        filterProducts();
+        sortProducts();
+    });
 
-    function deleteProduct(productId) {
-        const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
-        const form = document.getElementById('deleteForm');
-        form.action = '/products/' + productId + '/delete';
-        modal.show();
+    // Initial filter and sort
+    filterProducts();
+    sortProducts();
+});
+
+// Delete product function
+function deleteProduct(productId) {
+    if (confirm('هل أنت متأكد من حذف هذا المنتج؟')) {
+        fetch(`/products/${productId}/delete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('حدث خطأ أثناء حذف المنتج');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('حدث خطأ أثناء حذف المنتج');
+        });
     }
+}
 </script>
-{% endblock %}
+
+<style>
+.price-info {
+    min-width: 120px;
+}
+
+.product-row {
+    transition: all 0.2s ease;
+}
+
+.product-row:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+#quickSearch {
+    border-radius: 0.375rem 0 0 0.375rem;
+}
+
+.table th {
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.badge {
+    font-size: 0.75rem;
+}
+
+.btn-group-sm .btn {
+    padding: 0.25rem 0.5rem;
+}
+</style>
+{% endblock %} 
