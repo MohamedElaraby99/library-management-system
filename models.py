@@ -221,6 +221,10 @@ class Customer(db.Model):
 
 class Sale(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    subtotal = db.Column(db.Float, nullable=False, default=0, comment='المجموع الفرعي قبل الخصم')
+    discount_type = db.Column(db.String(20), nullable=False, default='none', comment='نوع الخصم')  # 'none', 'percentage', 'fixed'
+    discount_value = db.Column(db.Float, nullable=False, default=0, comment='قيمة الخصم')
+    discount_amount = db.Column(db.Float, nullable=False, default=0, comment='مبلغ الخصم المحسوب')
     total_amount = db.Column(db.Float, nullable=False)
     sale_date = db.Column(db.DateTime, default=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -268,6 +272,29 @@ class Sale(db.Model):
             if item.product:
                 cost += item.product.wholesale_price * item.quantity
         return cost
+    
+    @property
+    def discount_type_ar(self):
+        """ترجمة نوع الخصم للعربية"""
+        types = {
+            'none': 'بدون خصم',
+            'percentage': 'نسبة مئوية',
+            'fixed': 'مبلغ ثابت'
+        }
+        return types.get(self.discount_type, 'بدون خصم')
+    
+    def calculate_discount(self):
+        """حساب مبلغ الخصم بناءً على النوع والقيمة"""
+        if self.discount_type == 'percentage':
+            return (self.subtotal * self.discount_value) / 100
+        elif self.discount_type == 'fixed':
+            return min(self.discount_value, self.subtotal)  # لا يتجاوز الخصم المجموع الفرعي
+        return 0
+    
+    def update_totals(self):
+        """تحديث المجاميع بعد حساب الخصم"""
+        self.discount_amount = self.calculate_discount()
+        self.total_amount = self.subtotal - self.discount_amount
 
 class Payment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -370,6 +397,79 @@ class ShoppingList(db.Model):
         if self.estimated_price:
             return self.quantity_needed * self.estimated_price
         return 0
+
+# نموذج المرتجعات
+class Return(db.Model):
+    __tablename__ = 'return_transaction'  # تجنب الكلمة المحجوزة 'return'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    sale_id = db.Column(db.Integer, db.ForeignKey('sale.id'), nullable=False)
+    customer_id = db.Column(db.Integer, db.ForeignKey('customer.id'), nullable=True)
+    total_amount = db.Column(db.Float, nullable=False, comment='إجمالي قيمة المرتجع')
+    return_date = db.Column(db.DateTime, default=datetime.utcnow, comment='تاريخ الإرجاع')
+    reason = db.Column(db.String(200), nullable=False, comment='سبب الإرجاع')
+    status = db.Column(db.String(20), nullable=False, default='pending', comment='حالة المرتجع')  # 'pending', 'approved', 'rejected'
+    refund_method = db.Column(db.String(50), nullable=False, default='نقدي', comment='طريقة الاسترداد')  # 'نقدي', 'رصيد', 'تبديل'
+    notes = db.Column(db.Text, comment='ملاحظات')
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, comment='المستخدم الذي سجل المرتجع')
+    processed_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, comment='المستخدم الذي عالج المرتجع')
+    processed_date = db.Column(db.DateTime, nullable=True, comment='تاريخ المعالجة')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    sale = db.relationship('Sale', backref='returns', lazy=True)
+    customer = db.relationship('Customer', backref='returns', lazy=True)
+    user = db.relationship('User', foreign_keys=[user_id], backref='created_returns', lazy=True)
+    processor = db.relationship('User', foreign_keys=[processed_by], backref='processed_returns', lazy=True)
+    return_items = db.relationship('ReturnItem', backref='return_ref', lazy=True, cascade='all, delete-orphan')
+    
+    @property
+    def status_ar(self):
+        """ترجمة حالة المرتجع للعربية"""
+        statuses = {
+            'pending': 'قيد المراجعة',
+            'approved': 'مقبول',
+            'rejected': 'مرفوض'
+        }
+        return statuses.get(self.status, self.status)
+    
+    @property
+    def can_be_processed(self):
+        """هل يمكن معالجة المرتجع"""
+        return self.status == 'pending'
+
+class ReturnItem(db.Model):
+    __tablename__ = 'return_item'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    return_id = db.Column(db.Integer, db.ForeignKey('return_transaction.id'), nullable=False)
+    sale_item_id = db.Column(db.Integer, db.ForeignKey('sale_item.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    quantity_returned = db.Column(db.Float, nullable=False, comment='الكمية المرتجعة')
+    original_quantity = db.Column(db.Float, nullable=False, comment='الكمية الأصلية')
+    unit_price = db.Column(db.Float, nullable=False, comment='سعر الوحدة')
+    total_refund = db.Column(db.Float, nullable=False, comment='إجمالي الاسترداد')
+    condition = db.Column(db.String(50), nullable=False, default='جيد', comment='حالة المنتج المرتجع')  # 'جيد', 'متضرر', 'معيب'
+    notes = db.Column(db.Text, comment='ملاحظات على الصنف')
+    
+    # Relationships
+    sale_item = db.relationship('SaleItem', backref='return_items', lazy=True)
+    product = db.relationship('Product', backref='return_items', lazy=True)
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if self.quantity_returned and self.unit_price:
+            self.total_refund = self.quantity_returned * self.unit_price
+    
+    @property
+    def condition_ar(self):
+        """ترجمة حالة المنتج للعربية"""
+        conditions = {
+            'good': 'جيد',
+            'damaged': 'متضرر',
+            'defective': 'معيب'
+        }
+        return conditions.get(self.condition, self.condition)
 
 def create_static_user():
     """إنشاء المستخدم الثابت للنظام"""

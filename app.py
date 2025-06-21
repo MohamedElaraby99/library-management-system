@@ -16,7 +16,7 @@ import logging
 import secrets
 
 from config import config
-from models import db, User, Category, Product, Sale, SaleItem, Customer, Payment, Expense, ShoppingList
+from models import db, User, Category, Product, Sale, SaleItem, Customer, Payment, Expense, ShoppingList, Return, ReturnItem
 from forms import LoginForm, UserForm, CategoryForm, ProductForm, SaleForm, SaleItemForm, StockUpdateForm, CustomerForm, PaymentForm, ExpenseForm, ShoppingListForm
 
 app = Flask(__name__)
@@ -137,9 +137,12 @@ def format_egypt_datetime(utc_datetime):
     return egypt_time.strftime('%Y-%m-%d %H:%M:%S')
 
 def format_egypt_time_only(utc_datetime):
-    """تنسيق الوقت فقط بتوقيت مصر"""
+    """تنسيق الوقت فقط بتوقيت مصر بنظام 12 ساعة"""
     egypt_time = get_egypt_time(utc_datetime)
-    return egypt_time.strftime('%H:%M:%S')
+    time_str = egypt_time.strftime('%I:%M:%S %p')
+    # تحويل AM/PM إلى العربية
+    time_str = time_str.replace('AM', 'ص').replace('PM', 'م')
+    return time_str
 
 def format_egypt_date_only(utc_datetime):
     """تنسيق التاريخ فقط بتوقيت مصر"""
@@ -666,8 +669,16 @@ def add_product():
         )
         db.session.add(product)
         db.session.commit()
-        flash('تم إضافة المنتج بنجاح', 'success')
-        return redirect(url_for('products'))
+        
+        # التحقق من نوع الإجراء المطلوب
+        action = request.form.get('action', 'save_and_exit')
+        
+        if action == 'save_and_continue':
+            flash('تم إضافة المنتج بنجاح! يمكنك إضافة منتج آخر.', 'success')
+            return redirect(url_for('add_product', success=1))
+        else:
+            flash('تم إضافة المنتج بنجاح', 'success')
+            return redirect(url_for('products'))
     
     return render_template('products/form.html', form=form, title='إضافة منتج جديد')
 
@@ -686,8 +697,16 @@ def edit_product(id):
         form.populate_obj(product)
         product.updated_at = datetime.utcnow()
         db.session.commit()
-        flash('تم تحديث المنتج بنجاح', 'success')
-        return redirect(url_for('products'))
+        
+        # التحقق من نوع الإجراء المطلوب
+        action = request.form.get('action', 'save_and_exit')
+        
+        if action == 'save_and_continue':
+            flash('تم تحديث المنتج بنجاح! يمكنك إضافة منتج جديد.', 'success')
+            return redirect(url_for('add_product', success=1))
+        else:
+            flash('تم تحديث المنتج بنجاح', 'success')
+            return redirect(url_for('products'))
     
     return render_template('products/form.html', form=form, title='تعديل المنتج')
 
@@ -1067,9 +1086,75 @@ def debts_report():
 @seller_or_admin_required
 def sales():
     page = request.args.get('page', 1, type=int)
-    sales = Sale.query.order_by(desc(Sale.sale_date)).paginate(
-        page=page, per_page=10, error_out=False)
-    return render_template('sales/list.html', sales=sales)
+    
+    # Start with base query
+    query = Sale.query
+    
+    # Apply filters from request arguments
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    product_search = request.args.get('product_search')
+    seller_filter = request.args.get('seller_filter')
+    amount_from = request.args.get('amount_from')
+    amount_to = request.args.get('amount_to')
+    
+    # Date range filter
+    if date_from:
+        try:
+            date_from_dt = datetime.strptime(date_from, '%Y-%m-%d').date()
+            query = query.filter(func.date(Sale.sale_date) >= date_from_dt)
+        except ValueError:
+            pass
+    
+    if date_to:
+        try:
+            date_to_dt = datetime.strptime(date_to, '%Y-%m-%d').date()
+            query = query.filter(func.date(Sale.sale_date) <= date_to_dt)
+        except ValueError:
+            pass
+    
+    # Product search filter
+    if product_search:
+        # Join with SaleItem and Product to search in product names
+        query = query.join(SaleItem).join(Product).filter(
+            Product.name_ar.contains(product_search)
+        ).distinct()
+    
+    # Seller filter
+    if seller_filter:
+        try:
+            seller_id = int(seller_filter)
+            query = query.filter(Sale.user_id == seller_id)
+        except ValueError:
+            pass
+    
+    # Amount range filter
+    if amount_from:
+        try:
+            amount_from_val = float(amount_from)
+            query = query.filter(Sale.total_amount >= amount_from_val)
+        except ValueError:
+            pass
+    
+    if amount_to:
+        try:
+            amount_to_val = float(amount_to)
+            query = query.filter(Sale.total_amount <= amount_to_val)
+        except ValueError:
+            pass
+    
+    # Apply user permissions
+    if not current_user.is_admin():
+        query = query.filter(Sale.user_id == current_user.id)
+    
+    # Order by newest first and paginate
+    sales = query.order_by(desc(Sale.sale_date)).paginate(
+        page=page, per_page=20, error_out=False)
+    
+    # Get all users for seller filter dropdown
+    users = User.query.all() if current_user.is_admin() else [current_user]
+    
+    return render_template('sales/list.html', sales=sales, users=users)
 
 @app.route('/sales/new')
 @login_required
@@ -1178,6 +1263,12 @@ def api_create_sale():
     payment_type = data.get('payment_type', 'cash')  # 'cash' or 'credit'
     customer_id = data.get('customer_id') if payment_type == 'credit' else None
     paid_amount = float(data.get('paid_amount', 0))
+    
+    # Get discount info
+    subtotal = float(data.get('subtotal', 0))
+    discount_type = data.get('discount_type', 'none')
+    discount_value = float(data.get('discount_value', 0))
+    discount_amount = float(data.get('discount_amount', 0))
     total_amount = float(data['total_amount'])
     
     # Validate customer for credit sales
@@ -1196,8 +1287,12 @@ def api_create_sale():
         else:
             payment_status = 'unpaid'
     
-    # Create sale
+    # Create sale with discount info
     sale = Sale(
+        subtotal=subtotal,
+        discount_type=discount_type,
+        discount_value=discount_value,
+        discount_amount=discount_amount,
         total_amount=total_amount,
         user_id=current_user.id,
         customer_id=customer_id,
@@ -1279,12 +1374,18 @@ def api_sale_details(sale_id):
     
     # تحويل التاريخ إلى توقيت مصر
     egypt_time = get_egypt_time(sale.sale_date)
+    time_str = egypt_time.strftime('%I:%M:%S %p').replace('AM', 'ص').replace('PM', 'م')
+    datetime_str = egypt_time.strftime('%d/%m/%Y %I:%M:%S %p').replace('AM', 'ص').replace('PM', 'م')
     
     return jsonify({
         'id': sale.id,
-        'sale_date': egypt_time.strftime('%Y-%m-%d'),
-        'sale_time': egypt_time.strftime('%H:%M:%S'),
-        'sale_datetime': egypt_time.strftime('%Y-%m-%d %H:%M:%S'),
+        'sale_date': egypt_time.strftime('%d/%m/%Y'),
+        'sale_time': time_str,
+        'sale_datetime': datetime_str,
+        'subtotal': float(sale.subtotal or sale.total_amount),
+        'discount_type': sale.discount_type or 'none',
+        'discount_value': float(sale.discount_value or 0),
+        'discount_amount': float(sale.discount_amount or 0),
         'total_amount': float(sale.total_amount),
         'notes': sale.notes,
         'user_name': sale.user.username,
@@ -2581,6 +2682,257 @@ def api_test_database_export():
             'status': 'error',
             'message': str(e)
         }), 500
+
+# ================================
+# Routes للمرتجعات
+# ================================
+
+@app.route('/returns')
+@login_required
+@seller_or_admin_required
+def returns():
+    """عرض قائمة المرتجعات"""
+    page = request.args.get('page', 1, type=int)
+    status_filter = request.args.get('status', 'all')
+    
+    query = Return.query.join(Sale).join(User)
+    
+    # تطبيق فلتر الحالة
+    if status_filter != 'all':
+        query = query.filter(Return.status == status_filter)
+    
+    # فلترة حسب صلاحية المستخدم
+    if not current_user.is_admin():
+        query = query.filter(Return.user_id == current_user.id)
+    
+    returns = query.order_by(Return.return_date.desc()).paginate(
+        page=page, per_page=20, error_out=False
+    )
+    
+    return render_template('returns/list.html', returns=returns, status_filter=status_filter)
+
+@app.route('/returns/new/<int:sale_id>')
+@login_required
+@seller_or_admin_required
+def new_return(sale_id):
+    """إنشاء مرتجع جديد لبيعة معينة"""
+    sale = Sale.query.get_or_404(sale_id)
+    
+    # التحقق من الصلاحية
+    if not current_user.is_admin() and sale.user_id != current_user.id:
+        flash('ليس لديك صلاحية لإنشاء مرتجع لهذا البيع', 'error')
+        return redirect(url_for('sales'))
+    
+    return render_template('returns/new.html', sale=sale)
+
+@app.route('/api/returns', methods=['POST'])
+@login_required
+@seller_or_admin_required
+def api_create_return():
+    """API لإنشاء مرتجع جديد"""
+    try:
+        data = request.get_json()
+        sale_id = data.get('sale_id')
+        reason = data.get('reason', '')
+        refund_method = data.get('refund_method', 'نقدي')
+        notes = data.get('notes', '')
+        items = data.get('items', [])
+        
+        if not sale_id or not reason or not items:
+            return jsonify({'success': False, 'message': 'بيانات غير مكتملة'}), 400
+        
+        # التحقق من البيع
+        sale = Sale.query.get_or_404(sale_id)
+        if not current_user.is_admin() and sale.user_id != current_user.id:
+            return jsonify({'success': False, 'message': 'ليس لديك صلاحية لإنشاء مرتجع لهذا البيع'}), 403
+        
+        # إنشاء المرتجع
+        return_obj = Return(
+            sale_id=sale_id,
+            customer_id=sale.customer_id,
+            reason=reason,
+            refund_method=refund_method,
+            notes=notes,
+            user_id=current_user.id,
+            total_amount=0  # سيتم حسابه لاحقاً
+        )
+        
+        db.session.add(return_obj)
+        db.session.flush()  # للحصول على ID المرتجع
+        
+        total_amount = 0
+        
+        # إضافة أصناف المرتجع
+        for item_data in items:
+            sale_item_id = item_data.get('sale_item_id')
+            quantity_returned = float(item_data.get('quantity_returned', 0))
+            condition = item_data.get('condition', 'جيد')
+            item_notes = item_data.get('notes', '')
+            
+            # التحقق من صنف البيع
+            sale_item = SaleItem.query.get_or_404(sale_item_id)
+            if sale_item.sale_id != sale_id:
+                return jsonify({'success': False, 'message': 'خطأ في بيانات الصنف'}), 400
+            
+            # التحقق من الكمية
+            if quantity_returned <= 0 or quantity_returned > sale_item.quantity:
+                return jsonify({'success': False, 'message': f'كمية خاطئة للصنف {sale_item.product.name_ar}'}), 400
+            
+            # إنشاء صنف المرتجع
+            return_item = ReturnItem(
+                return_id=return_obj.id,
+                sale_item_id=sale_item_id,
+                product_id=sale_item.product_id,
+                quantity_returned=quantity_returned,
+                original_quantity=sale_item.quantity,
+                unit_price=sale_item.unit_price,
+                condition=condition,
+                notes=item_notes
+            )
+            
+            db.session.add(return_item)
+            total_amount += return_item.total_refund
+        
+        # تحديث إجمالي المرتجع
+        return_obj.total_amount = total_amount
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'تم إنشاء المرتجع بنجاح',
+            'return_id': return_obj.id
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/returns/<int:return_id>')
+@login_required
+def api_return_details(return_id):
+    """API لعرض تفاصيل المرتجع"""
+    return_obj = Return.query.get_or_404(return_id)
+    
+    # التحقق من الصلاحية
+    if not current_user.is_admin() and return_obj.user_id != current_user.id:
+        return jsonify({'error': 'ليس لديك صلاحية لعرض هذا المرتجع'}), 403
+    
+    # تفاصيل أصناف المرتجع
+    items = []
+    for item in return_obj.return_items:
+        items.append({
+            'product_name': item.product.name_ar,
+            'quantity_returned': float(item.quantity_returned),
+            'original_quantity': float(item.original_quantity),
+            'unit_price': float(item.unit_price),
+            'total_refund': float(item.total_refund),
+            'condition': item.condition,
+            'condition_ar': item.condition_ar,
+            'notes': item.notes or ''
+        })
+    
+    # تحويل التاريخ إلى توقيت مصر
+    egypt_time = get_egypt_time(return_obj.return_date)
+    
+    return jsonify({
+        'id': return_obj.id,
+        'sale_id': return_obj.sale_id,
+        'customer_name': return_obj.customer.name if return_obj.customer else 'زبون نقدي',
+        'total_amount': float(return_obj.total_amount),
+        'return_date': egypt_time.strftime('%d/%m/%Y'),
+        'return_time': egypt_time.strftime('%I:%M:%S %p').replace('AM', 'ص').replace('PM', 'م'),
+        'reason': return_obj.reason,
+        'status': return_obj.status,
+        'status_ar': return_obj.status_ar,
+        'refund_method': return_obj.refund_method,
+        'notes': return_obj.notes or '',
+        'user_name': return_obj.user.username,
+        'processor_name': return_obj.processor.username if return_obj.processor else '',
+        'processed_date': return_obj.processed_date.strftime('%d/%m/%Y') if return_obj.processed_date else '',
+        'items': items
+    })
+
+@app.route('/api/returns/<int:return_id>/process', methods=['POST'])
+@login_required
+@admin_required
+def api_process_return(return_id):
+    """API لمعالجة المرتجع (قبول/رفض)"""
+    try:
+        data = request.get_json()
+        action = data.get('action')  # 'approve' or 'reject'
+        notes = data.get('notes', '')
+        
+        if action not in ['approve', 'reject']:
+            return jsonify({'success': False, 'message': 'إجراء غير صحيح'}), 400
+        
+        return_obj = Return.query.get_or_404(return_id)
+        
+        if not return_obj.can_be_processed:
+            return jsonify({'success': False, 'message': 'لا يمكن معالجة هذا المرتجع'}), 400
+        
+        # تحديث حالة المرتجع
+        return_obj.status = 'approved' if action == 'approve' else 'rejected'
+        return_obj.processed_by = current_user.id
+        return_obj.processed_date = datetime.utcnow()
+        if notes:
+            return_obj.notes = (return_obj.notes or '') + f'\n\nملاحظات المعالجة: {notes}'
+        
+        # إذا تم قبول المرتجع، تحديث المخزون
+        if action == 'approve':
+            for return_item in return_obj.return_items:
+                # إضافة الكمية المرتجعة إلى المخزون إذا كانت في حالة جيدة
+                if return_item.condition in ['جيد', 'good']:
+                    product = return_item.product
+                    product.stock_quantity += return_item.quantity_returned
+        
+        db.session.commit()
+        
+        status_message = 'تم قبول المرتجع وإضافة الكمية للمخزون' if action == 'approve' else 'تم رفض المرتجع'
+        
+        return jsonify({
+            'success': True,
+            'message': status_message
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/sale/<int:sale_id>/items')
+@login_required
+@seller_or_admin_required
+def api_sale_items(sale_id):
+    """API لعرض أصناف البيع للمرتجع"""
+    sale = Sale.query.get_or_404(sale_id)
+    
+    # التحقق من الصلاحية
+    if not current_user.is_admin() and sale.user_id != current_user.id:
+        return jsonify({'error': 'ليس لديك صلاحية لعرض هذا البيع'}), 403
+    
+    items = []
+    for item in sale.sale_items:
+        # حساب الكمية المرتجعة سابقاً
+        returned_quantity = sum(
+            ri.quantity_returned for ri in item.return_items 
+            if ri.return_ref.status == 'approved'
+        )
+        
+        available_quantity = item.quantity - returned_quantity
+        
+        if available_quantity > 0:  # فقط الأصناف التي يمكن إرجاعها
+            items.append({
+                'id': item.id,
+                'product_name': item.product.name_ar,
+                'quantity': float(item.quantity),
+                'returned_quantity': float(returned_quantity),
+                'available_quantity': float(available_quantity),
+                'unit_price': float(item.unit_price),
+                'total_price': float(item.total_price),
+                'unit_type': item.product.unit_type
+            })
+    
+    return jsonify(items)
 
 @app.route('/debug-auth')
 def debug_auth():

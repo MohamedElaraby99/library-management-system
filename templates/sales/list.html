@@ -24,6 +24,116 @@
         </div>
     </div>
 
+    <!-- Filters Card -->
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-funnel"></i>
+                فلاتر البحث والتصفية
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" id="filterForm">
+                <div class="row g-3">
+                    <!-- تاريخ من -->
+                    <div class="col-md-3">
+                        <label for="date_from" class="form-label">
+                            <i class="bi bi-calendar-date"></i>
+                            من تاريخ
+                        </label>
+                        <input type="date" class="form-control" id="date_from" name="date_from"
+                            value="{{ request.args.get('date_from', '') }}" onchange="applyFilters()">
+                    </div>
+
+                    <!-- تاريخ إلى -->
+                    <div class="col-md-3">
+                        <label for="date_to" class="form-label">
+                            <i class="bi bi-calendar-check"></i>
+                            إلى تاريخ
+                        </label>
+                        <input type="date" class="form-control" id="date_to" name="date_to"
+                            value="{{ request.args.get('date_to', '') }}" onchange="applyFilters()">
+                    </div>
+
+                    <!-- البحث بالمنتج -->
+                    <div class="col-md-3">
+                        <label for="product_search" class="form-label">
+                            <i class="bi bi-search"></i>
+                            البحث بالمنتج
+                        </label>
+                        <input type="text" class="form-control" id="product_search" name="product_search"
+                            placeholder="اسم المنتج..." value="{{ request.args.get('product_search', '') }}"
+                            onkeyup="debounceFilter()">
+                    </div>
+
+                    <!-- البحث بالبائع -->
+                    <div class="col-md-3">
+                        <label for="seller_filter" class="form-label">
+                            <i class="bi bi-person"></i>
+                            البائع
+                        </label>
+                        <select class="form-select" id="seller_filter" name="seller_filter" onchange="applyFilters()">
+                            <option value="">جميع البائعين</option>
+                            {% for user in users %}
+                            <option value="{{ user.id }}" {% if request.args.get('seller_filter')==user.id|string
+                                %}selected{% endif %}>
+                                {{ user.username }}
+                                {% if user.is_admin() %} (مدير){% else %} (بائع){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <!-- المبلغ من -->
+                    <div class="col-md-2">
+                        <label for="amount_from" class="form-label">
+                            <i class="bi bi-currency-exchange"></i>
+                            المبلغ من
+                        </label>
+                        <input type="number" class="form-control" id="amount_from" name="amount_from" placeholder="0"
+                            step="0.01" value="{{ request.args.get('amount_from', '') }}" onchange="applyFilters()">
+                    </div>
+
+                    <!-- المبلغ إلى -->
+                    <div class="col-md-2">
+                        <label for="amount_to" class="form-label">
+                            <i class="bi bi-cash-stack"></i>
+                            المبلغ إلى
+                        </label>
+                        <input type="number" class="form-control" id="amount_to" name="amount_to" placeholder="999999"
+                            step="0.01" value="{{ request.args.get('amount_to', '') }}" onchange="applyFilters()">
+                    </div>
+
+                    <!-- أزرار التحكم -->
+                    <div class="col-md-8 d-flex align-items-end gap-2">
+                        <button type="button" class="btn btn-primary" onclick="applyFilters()">
+                            <i class="bi bi-search"></i>
+                            بحث
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="clearFilters()">
+                            <i class="bi bi-x-circle"></i>
+                            مسح الفلاتر
+                        </button>
+                        <button type="button" class="btn btn-outline-success" onclick="setTodayFilter()">
+                            <i class="bi bi-calendar-day"></i>
+                            اليوم فقط
+                        </button>
+                        <button type="button" class="btn btn-outline-warning" onclick="setWeekFilter()">
+                            <i class="bi bi-calendar-week"></i>
+                            هذا الأسبوع
+                        </button>
+                        <button type="button" class="btn btn-outline-info" onclick="setMonthFilter()">
+                            <i class="bi bi-calendar-month"></i>
+                            هذا الشهر
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Sales Table -->
     <div class="card">
         <div class="card-header bg-white">
@@ -31,6 +141,10 @@
                 <i class="bi bi-list-ul"></i>
                 قائمة المبيعات
                 <span class="badge bg-secondary ms-2">{{ sales.total }} عملية بيع</span>
+                {% if request.args.get('date_from') or request.args.get('product_search') or
+                request.args.get('seller_filter') or request.args.get('amount_from') %}
+                <span class="badge bg-warning ms-1 filter-badge">🔍 مفلترة</span>
+                {% endif %}
             </h5>
         </div>
         <div class="card-body p-0">
@@ -41,6 +155,7 @@
                         <tr>
                             <th>رقم البيع</th>
                             <th>التاريخ والوقت</th>
+                            <th>المنتجات</th>
                             <th>إجمالي المبلغ</th>
                             <th>البائع</th>
                             <th>عدد الأصناف</th>
@@ -59,8 +174,40 @@
                                 {{ sale.sale_date|egypt_date }}<br>
                                 <small class="text-muted">{{ sale.sale_date|egypt_time }}</small>
                             </td>
+                            <td class="products-column">
+                                <div class="product-list" data-bs-toggle="tooltip" data-bs-placement="top"
+                                    title="{% if sale.sale_items|length > 3 %}{% for item in sale.sale_items %}{{ item.quantity|int }}x {{ item.product.name_ar }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}">
+                                    {% for item in sale.sale_items[:3] %}
+                                    <div class="product-item">
+                                        <span class="badge bg-light text-dark me-1">{{ item.quantity|int }}</span>
+                                        <span class="product-name" title="{{ item.product.name_ar }}">{{
+                                            item.product.name_ar }}</span>
+                                    </div>
+                                    {% endfor %}
+                                    {% if sale.sale_items|length > 3 %}
+                                    <div class="more-products">
+                                        <i class="bi bi-plus-circle"></i>
+                                        +{{ sale.sale_items|length - 3 }} منتج آخر
+                                        <i class="bi bi-info-circle ms-1" style="font-size: 0.7rem;"></i>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </td>
                             <td class="currency text-success fw-bold">
+                                {% if sale.discount_amount and sale.discount_amount > 0 %}
+                                <div>
+                                    <span class="text-muted text-decoration-line-through">{{ (sale.total_amount +
+                                        sale.discount_amount)|currency }}</span>
+                                    <br>
+                                    {{ sale.total_amount|currency }}
+                                    <br>
+                                    <small class="badge bg-warning text-dark">
+                                        خصم {{ sale.discount_amount|currency }}
+                                    </small>
+                                </div>
+                                {% else %}
                                 {{ sale.total_amount|currency }}
+                                {% endif %}
                             </td>
                             <td>
                                 {{ sale.user.username }}
@@ -75,8 +222,8 @@
                             </td>
                             <td>
                                 {% if sale.notes %}
-                                <span class="text-truncate" style="max-width: 200px;" title="{{ sale.notes }}">
-                                    {{ sale.notes[:50] }}{% if sale.notes|length > 50 %}...{% endif %}
+                                <span class="text-truncate" style="max-width: 150px;" title="{{ sale.notes }}">
+                                    {{ sale.notes[:30] }}{% if sale.notes|length > 30 %}...{% endif %}
                                 </span>
                                 {% else %}
                                 <small class="text-muted">لا توجد ملاحظات</small>
@@ -92,6 +239,10 @@
                                         onclick="printSale({{ sale.id }})" title="طباعة الفاتورة">
                                         <i class="bi bi-printer"></i>
                                     </button>
+                                    <a href="{{ url_for('new_return', sale_id=sale.id) }}"
+                                        class="btn btn-outline-warning" title="إنشاء مرتجع">
+                                        <i class="bi bi-arrow-return-left"></i>
+                                    </a>
                                 </div>
                             </td>
                         </tr>
@@ -107,7 +258,8 @@
                     <ul class="pagination pagination-sm justify-content-center mb-0">
                         {% if sales.has_prev %}
                         <li class="page-item">
-                            <a class="page-link" href="{{ url_for('sales', page=sales.prev_num) }}">السابق</a>
+                            <a class="page-link"
+                                href="{{ url_for('sales', page=sales.prev_num, **request.args) }}">السابق</a>
                         </li>
                         {% endif %}
 
@@ -115,7 +267,8 @@
                         {% if page_num %}
                         {% if page_num != sales.page %}
                         <li class="page-item">
-                            <a class="page-link" href="{{ url_for('sales', page=page_num) }}">{{ page_num }}</a>
+                            <a class="page-link" href="{{ url_for('sales', page=page_num, **request.args) }}">{{
+                                page_num }}</a>
                         </li>
                         {% else %}
                         <li class="page-item active">
@@ -131,7 +284,8 @@
 
                         {% if sales.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="{{ url_for('sales', page=sales.next_num) }}">التالي</a>
+                            <a class="page-link"
+                                href="{{ url_for('sales', page=sales.next_num, **request.args) }}">التالي</a>
                         </li>
                         {% endif %}
                     </ul>
@@ -143,11 +297,20 @@
             <div class="text-center py-5">
                 <i class="bi bi-cart-x text-muted" style="font-size: 4rem;"></i>
                 <h4 class="text-muted mt-3">لا توجد مبيعات</h4>
+                {% if request.args.get('date_from') or request.args.get('product_search') or
+                request.args.get('seller_filter') %}
+                <p class="text-muted">لا توجد نتائج تطابق الفلاتر المحددة</p>
+                <button class="btn btn-outline-secondary" onclick="clearFilters()">
+                    <i class="bi bi-x-circle"></i>
+                    مسح الفلاتر
+                </button>
+                {% else %}
                 <p class="text-muted">لم يتم تسجيل أي عمليات بيع حتى الآن</p>
                 <a href="{{ url_for('new_sale') }}" class="btn btn-success">
                     <i class="bi bi-plus-circle"></i>
                     إجراء أول عملية بيع
                 </a>
+                {% endif %}
             </div>
             {% endif %}
         </div>
@@ -223,10 +386,175 @@
     .badge {
         font-size: 0.8em;
     }
+
+    .products-column {
+        max-width: 250px;
+    }
+
+    .product-list {
+        max-height: 100px;
+        overflow-y: auto;
+        padding: 5px;
+        border-radius: 6px;
+        background: #f8f9fa;
+    }
+
+    .product-item {
+        display: flex;
+        align-items: center;
+        font-size: 0.85rem;
+        line-height: 1.3;
+        padding: 2px 0;
+    }
+
+    .product-item .badge {
+        font-size: 0.7rem;
+        min-width: 25px;
+        text-align: center;
+    }
+
+    .product-name {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 180px;
+        color: #495057;
+        font-weight: 500;
+    }
+
+    .more-products {
+        font-size: 0.75rem;
+        color: #6c757d;
+        font-style: italic;
+        cursor: pointer;
+        transition: color 0.3s ease;
+    }
+
+    .more-products:hover {
+        color: #495057;
+    }
+
+    .product-tooltip {
+        max-width: 300px;
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: #495057;
+    }
+
+    .card-header.bg-light {
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    .btn-outline-success:hover,
+    .btn-outline-warning:hover,
+    .btn-outline-info:hover {
+        transform: translateY(-1px);
+    }
+
+    .filter-badge {
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0% {
+            transform: scale(1);
+        }
+
+        50% {
+            transform: scale(1.05);
+        }
+
+        100% {
+            transform: scale(1);
+        }
+    }
+
+    .products-column .product-list::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    .products-column .product-list::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 2px;
+    }
+
+    .products-column .product-list::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 2px;
+    }
+
+    .products-column .product-list::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
 </style>
 
 <script>
     let currentSaleId = null;
+    let debounceTimer = null;
+
+    // تفعيل tooltips
+    document.addEventListener('DOMContentLoaded', function () {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+
+    // دالة تطبيق الفلاتر
+    function applyFilters() {
+        document.getElementById('filterForm').submit();
+    }
+
+    // دالة مسح الفلاتر
+    function clearFilters() {
+        document.getElementById('date_from').value = '';
+        document.getElementById('date_to').value = '';
+        document.getElementById('product_search').value = '';
+        document.getElementById('seller_filter').value = '';
+        document.getElementById('amount_from').value = '';
+        document.getElementById('amount_to').value = '';
+        window.location.href = '{{ url_for("sales") }}';
+    }
+
+    // دالة فلتر اليوم
+    function setTodayFilter() {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('date_from').value = today;
+        document.getElementById('date_to').value = today;
+        applyFilters();
+    }
+
+    // دالة فلتر الأسبوع
+    function setWeekFilter() {
+        const today = new Date();
+        const weekStart = new Date(today.setDate(today.getDate() - today.getDay()));
+        const weekEnd = new Date(today.setDate(weekStart.getDate() + 6));
+
+        document.getElementById('date_from').value = weekStart.toISOString().split('T')[0];
+        document.getElementById('date_to').value = weekEnd.toISOString().split('T')[0];
+        applyFilters();
+    }
+
+    // دالة فلتر الشهر
+    function setMonthFilter() {
+        const today = new Date();
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+        document.getElementById('date_from').value = monthStart.toISOString().split('T')[0];
+        document.getElementById('date_to').value = monthEnd.toISOString().split('T')[0];
+        applyFilters();
+    }
+
+    // دالة تأخير البحث
+    function debounceFilter() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            applyFilters();
+        }, 1000); // تأخير ثانية واحدة
+    }
 
     function viewSaleDetails(saleId) {
         currentSaleId = saleId;
@@ -372,16 +700,36 @@
                         </table>
                     </div>
                 </div>
-                <div class="card-footer bg-success text-white">
-                    <div class="row align-items-center">
-                        <div class="col-8">
-                            <h5 class="mb-0">
-                                <i class="bi bi-cash-stack me-2"></i>
-                                المجموع الكلي:
-                            </h5>
+                <div class="card-footer bg-light">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-muted">المجموع الفرعي:</span>
+                                <span>${sale.subtotal.toFixed(2)} ج.م</span>
+                            </div>
+                            ${sale.discount_amount > 0 ? `
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-warning">
+                                    <i class="bi bi-dash-circle me-1"></i>
+                                    الخصم (${sale.discount_type === 'percentage' ? sale.discount_value + '%' : sale.discount_value + ' ج.م'}):
+                                </span>
+                                <span class="text-warning">${sale.discount_amount.toFixed(2)} ج.م</span>
+                            </div>
+                            ` : ''}
+                            <hr class="my-2">
+                            <div class="d-flex justify-content-between">
+                                <strong class="text-success">الإجمالي النهائي:</strong>
+                                <strong class="text-success">${total.toFixed(2)} ج.م</strong>
+                            </div>
                         </div>
-                        <div class="col-4 text-end">
-                            <h4 class="mb-0 fw-bold">${total.toFixed(2)} ج.م</h4>
+                        <div class="col-md-6 text-center">
+                            <div class="bg-success text-white p-3 rounded">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-cash-stack me-2"></i>
+                                    المجموع الكلي
+                                </h5>
+                                <h3 class="mb-0 fw-bold">${total.toFixed(2)} ج.م</h3>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -767,6 +1115,17 @@
         </div>
         
         <div class="total-section">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+                <span>المجموع الفرعي:</span>
+                <span>${sale.subtotal.toFixed(2)} ج.م</span>
+            </div>
+            ${sale.discount_amount > 0 ? `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 15px; color: #f57c00;">
+                <span>الخصم (${sale.discount_type === 'percentage' ? sale.discount_value + '%' : sale.discount_value + ' ج.م'}):</span>
+                <span>-${sale.discount_amount.toFixed(2)} ج.م</span>
+            </div>
+            <hr style="margin: 15px 0; border: 1px solid rgba(255,255,255,0.3);">
+            ` : ''}
             <h3 style="margin: 0; font-size: 1.5rem;">💰 المجموع الكلي</h3>
             <div class="total-amount">${total.toFixed(2)} ج.م</div>
             <p style="margin: 10px 0 0 0; opacity: 0.9;">تم الدفع نقداً</p>
