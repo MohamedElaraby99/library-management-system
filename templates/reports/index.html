@@ -13,13 +13,21 @@
                 </h2>
             </div>
 
-            <!-- زر تحميل قاعدة البيانات كاملة -->
+            <!-- أزرار الاستيراد والتصدير -->
             <div class="row mb-4">
                 <div class="col-12 text-center">
-                    <button class="btn btn-lg btn-success" onclick="downloadFullDatabaseExcel()">
-                        <i class="bi bi-file-earmark-excel me-2"></i>
-                        تحميل كل قاعدة البيانات (Excel)
-                    </button>
+                    <div class="d-flex gap-3 justify-content-center flex-wrap">
+                        <button class="btn btn-lg btn-success" onclick="downloadFullDatabaseExcel()">
+                            <i class="bi bi-file-earmark-excel me-2"></i>
+                            تحميل كل قاعدة البيانات (Excel)
+                        </button>
+                        {% if current_user.is_admin() %}
+                        <a href="{{ url_for('products') }}" class="btn btn-lg btn-primary">
+                            <i class="bi bi-upload me-2"></i>
+                            استيراد منتجات من Excel
+                        </a>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
 

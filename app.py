@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, session
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, session, make_response
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from functools import wraps
 from flask_migrate import Migrate
@@ -14,6 +14,11 @@ import json
 import os
 import logging
 import secrets
+from werkzeug.utils import secure_filename
+import tempfile
+from io import BytesIO
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, PatternFill
 
 from config import config
 from models import db, User, Category, Product, Sale, SaleItem, Customer, Payment, Expense, ShoppingList, Return, ReturnItem
@@ -2933,6 +2938,330 @@ def api_sale_items(sale_id):
             })
     
     return jsonify(items)
+
+@app.route('/api/products/excel-template')
+@login_required
+@admin_required
+def api_products_excel_template():
+    """تحميل نموذج Excel للمنتجات"""
+    try:
+        # إنشاء workbook جديد
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "المنتجات"
+        
+        # العناوين
+        headers = [
+            'اسم المنتج', 'وصف المنتج', 'الفئة', 'سعر الجملة', 
+            'سعر البيع', 'الكمية', 'الحد الأدنى للمخزون', 'نوع الوحدة', 'وصف الوحدة'
+        ]
+        
+        # إضافة العناوين
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_num, value=header)
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+        
+        # إضافة بيانات تجريبية
+        sample_data = [
+            ['منتج تجريبي 1', 'وصف المنتج الأول', 'قرطاسية', 10.50, 15.00, 100, 10, 'كامل', 'قطعة'],
+            ['منتج تجريبي 2', 'وصف المنتج الثاني', 'كتب', 25.00, 35.00, 50, 5, 'كامل', 'كتاب']
+        ]
+        
+        for row_num, row_data in enumerate(sample_data, 2):
+            for col_num, value in enumerate(row_data, 1):
+                ws.cell(row=row_num, column=col_num, value=value)
+        
+        # ضبط عرض الأعمدة
+        column_widths = [20, 25, 15, 12, 12, 10, 18, 12, 15]
+        for col_num, width in enumerate(column_widths, 1):
+            ws.column_dimensions[ws.cell(row=1, column=col_num).column_letter].width = width
+        
+        # حفظ في الذاكرة
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = 'attachment; filename=products_template.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        app.logger.error(f"Error creating Excel template: {str(e)}")
+        return jsonify({'error': 'حدث خطأ في إنشاء النموذج'}), 500
+
+@app.route('/api/products/import-excel', methods=['POST'])
+@login_required
+@admin_required
+def api_products_import_excel():
+    """استيراد المنتجات من ملف Excel"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': 'لم يتم العثور على ملف'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'message': 'لم يتم اختيار ملف'}), 400
+        
+        # التحقق من نوع الملف
+        if not file.filename.lower().endswith(('.xlsx', '.xls')):
+            return jsonify({'success': False, 'message': 'نوع الملف غير مدعوم. يرجى استخدام ملف Excel'}), 400
+        
+        # التحقق من حجم الملف (5 ميجابايت)
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
+        
+        if file_size > 5 * 1024 * 1024:  # 5MB
+            return jsonify({'success': False, 'message': 'حجم الملف كبير جداً. الحد الأقصى 5 ميجابايت'}), 400
+        
+        update_existing = request.form.get('update_existing') == 'true'
+        
+        # قراءة ملف Excel باستخدام openpyxl
+        try:
+            wb = load_workbook(file)
+            ws = wb.active
+        except Exception as e:
+            return jsonify({'success': False, 'message': f'خطأ في قراءة ملف Excel: {str(e)}'}), 400
+        
+        # قراءة العناوين من الصف الأول
+        headers = []
+        for cell in ws[1]:
+            if cell.value:
+                headers.append(str(cell.value).strip())
+            else:
+                headers.append('')
+        
+        # التحقق من الأعمدة المطلوبة
+        required_columns = ['اسم المنتج', 'الفئة', 'سعر الجملة', 'سعر البيع', 'الكمية']
+        missing_columns = [col for col in required_columns if col not in headers]
+        
+        if missing_columns:
+            return jsonify({
+                'success': False, 
+                'message': f'أعمدة مفقودة: {", ".join(missing_columns)}'
+            }), 400
+        
+        # إنشاء فهرس للأعمدة
+        column_index = {}
+        for i, header in enumerate(headers):
+            if header:
+                column_index[header] = i
+        
+        # إحصائيات الاستيراد
+        added_count = 0
+        updated_count = 0
+        skipped_count = 0
+        errors = []
+        
+        # تعريف دالة مساعدة خارج الحلقة
+        def get_cell_value(row, column_name, default=''):
+            if column_name in column_index and column_index[column_name] < len(row):
+                value = row[column_index[column_name]]
+                if value is None:
+                    return default
+                value_str = str(value).strip()
+                return value_str if value_str.lower() not in ['none', 'nan', ''] else default
+            return default
+        
+        # إضافة logging للتشخيص
+        app.logger.info(f"Starting import process. Total rows to process: {ws.max_row - 1}")
+        
+        # معالجة كل صف (بداية من الصف الثاني)
+        for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+            try:
+                # تجاهل الصفوف الفارغة
+                if not any(row) or all(v is None or str(v).strip() == '' for v in row):
+                    app.logger.debug(f"Skipping empty row {row_num}")
+                    continue
+                
+                product_name = get_cell_value(row, 'اسم المنتج')
+                category_name = get_cell_value(row, 'الفئة')
+                
+                app.logger.debug(f"Processing row {row_num}: product='{product_name}', category='{category_name}'")
+                
+                # التحقق من البيانات الأساسية
+                if not product_name or product_name.lower() in ['none', 'nan', '']:
+                    errors.append(f'الصف {row_num}: اسم المنتج فارغ أو غير صحيح')
+                    skipped_count += 1
+                    continue
+                
+                try:
+                    wholesale_price_str = get_cell_value(row, 'سعر الجملة', '0')
+                    retail_price_str = get_cell_value(row, 'سعر البيع', '0')
+                    stock_quantity_str = get_cell_value(row, 'الكمية', '0')
+                    
+                    wholesale_price = float(wholesale_price_str)
+                    retail_price = float(retail_price_str)
+                    stock_quantity = float(stock_quantity_str)
+                except (ValueError, TypeError) as e:
+                    errors.append(f'الصف {row_num}: خطأ في تحويل الأرقام - {str(e)}')
+                    skipped_count += 1
+                    continue
+                
+                if wholesale_price <= 0 or retail_price <= 0:
+                    errors.append(f'الصف {row_num}: أسعار غير صحيحة')
+                    skipped_count += 1
+                    continue
+                
+                if retail_price <= wholesale_price:
+                    errors.append(f'الصف {row_num}: سعر البيع يجب أن يكون أكبر من سعر الجملة')
+                    skipped_count += 1
+                    continue
+                
+                # البحث عن الفئة
+                category = Category.query.filter_by(name_ar=category_name).first()
+                if not category:
+                    errors.append(f'الصف {row_num}: الفئة "{category_name}" غير موجودة')
+                    skipped_count += 1
+                    continue
+                
+                # التحقق من وجود المنتج
+                existing_product = Product.query.filter_by(name_ar=product_name).first()
+                
+                if existing_product and not update_existing:
+                    skipped_count += 1
+                    continue
+                
+                # البيانات الاختيارية
+                description = get_cell_value(row, 'وصف المنتج')
+                
+                try:
+                    min_stock = float(get_cell_value(row, 'الحد الأدنى للمخزون', '10'))
+                except (ValueError, TypeError):
+                    min_stock = 10
+                
+                unit_type = get_cell_value(row, 'نوع الوحدة', 'كامل')
+                if unit_type not in ['كامل', 'جزئي']:
+                    unit_type = 'كامل'
+                
+                unit_description = get_cell_value(row, 'وصف الوحدة')
+                
+                if existing_product and update_existing:
+                    # تحديث المنتج الموجود
+                    app.logger.info(f"Updating existing product: {product_name}")
+                    existing_product.description_ar = description
+                    existing_product.category_id = category.id
+                    existing_product.wholesale_price = wholesale_price
+                    existing_product.retail_price = retail_price
+                    existing_product.price = retail_price
+                    existing_product.stock_quantity = stock_quantity
+                    existing_product.min_stock_threshold = min_stock
+                    existing_product.unit_type = unit_type
+                    existing_product.unit_description = unit_description
+                    existing_product.updated_at = datetime.utcnow()
+                    updated_count += 1
+                else:
+                    # إضافة منتج جديد
+                    app.logger.info(f"Adding new product: {product_name}")
+                    new_product = Product(
+                        name_ar=product_name,
+                        description_ar=description,
+                        category_id=category.id,
+                        wholesale_price=wholesale_price,
+                        retail_price=retail_price,
+                        price=retail_price,
+                        stock_quantity=stock_quantity,
+                        min_stock_threshold=min_stock,
+                        unit_type=unit_type,
+                        unit_description=unit_description
+                    )
+                    db.session.add(new_product)
+                    added_count += 1
+                    
+                app.logger.info(f"Row {row_num} processed successfully")
+                
+            except Exception as e:
+                app.logger.error(f'Error processing row {row_num}: {str(e)}')
+                errors.append(f'الصف {row_num}: {str(e)}')
+                skipped_count += 1
+                continue
+        
+        # حفظ التغييرات
+        try:
+            app.logger.info(f"Import summary: added={added_count}, updated={updated_count}, skipped={skipped_count}, errors={len(errors)}")
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': 'تم استيراد المنتجات بنجاح',
+                'added_count': added_count,
+                'updated_count': updated_count,
+                'skipped_count': skipped_count,
+                'errors': errors[:10],  # أول 10 أخطاء فقط
+                'total_rows_processed': added_count + updated_count + skipped_count
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({
+                'success': False,
+                'message': f'خطأ في حفظ البيانات: {str(e)}'
+            }), 500
+            
+    except Exception as e:
+        app.logger.error(f"Error importing Excel: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'خطأ في معالجة الملف: {str(e)}'
+        }), 500
+
+@app.route('/api/products/debug-excel', methods=['POST'])
+@login_required
+@admin_required
+def api_debug_excel():
+    """اختبار قراءة ملف Excel لتشخيص المشاكل"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'لم يتم العثور على ملف'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'لم يتم اختيار ملف'}), 400
+        
+        # قراءة ملف Excel
+        wb = load_workbook(file)
+        ws = wb.active
+        
+        # قراءة العناوين
+        headers = []
+        for cell in ws[1]:
+            if cell.value:
+                headers.append(str(cell.value).strip())
+            else:
+                headers.append('')
+        
+        # قراءة أول 5 صفوف للاختبار
+        rows_data = []
+        row_count = 0
+        for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+            if row_count >= 5:  # اقرأ أول 5 صفوف فقط
+                break
+            
+            row_data = {}
+            for i, header in enumerate(headers):
+                if header and i < len(row):
+                    value = row[i]
+                    row_data[header] = str(value) if value is not None else 'None'
+            
+            rows_data.append({
+                'row_number': row_num,
+                'data': row_data,
+                'raw_values': [str(v) if v is not None else 'None' for v in row[:len(headers)]]
+            })
+            row_count += 1
+        
+        return jsonify({
+            'total_rows': ws.max_row,
+            'headers': headers,
+            'sample_rows': rows_data,
+            'worksheet_name': ws.title
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'خطأ في قراءة الملف: {str(e)}'}), 500
 
 @app.route('/debug-auth')
 def debug_auth():
