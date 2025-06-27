@@ -138,12 +138,12 @@ class DatabaseManager {
         }
         if (filters.search) {
           const searchTerm = filters.search.toLowerCase();
-          products = products.filter(
-            (p) =>
-              p.name_ar.toLowerCase().includes(searchTerm) ||
-              (p.description_ar &&
-                p.description_ar.toLowerCase().includes(searchTerm))
-          );
+          products = products.filter((p) => {
+            return (
+              this.safeStringIncludes(p.name_ar, searchTerm) ||
+              this.safeStringIncludes(p.description_ar, searchTerm)
+            );
+          });
         }
         if (filters.low_stock) {
           products = products.filter(
@@ -232,11 +232,14 @@ class DatabaseManager {
 
         if (search) {
           const searchTerm = search.toLowerCase();
-          customers = customers.filter(
-            (c) =>
-              c.name.toLowerCase().includes(searchTerm) ||
-              (c.phone && c.phone.includes(searchTerm))
-          );
+          customers = customers.filter((c) => {
+            return (
+              this.safeStringIncludes(c.name, searchTerm) ||
+              (c.phone &&
+                typeof c.phone === "string" &&
+                c.phone.includes(searchTerm))
+            );
+          });
         }
 
         resolve(customers);
@@ -476,6 +479,97 @@ class DatabaseManager {
       quota: estimate.quota,
       percentage: ((estimate.usage / estimate.quota) * 100).toFixed(2),
     };
+  }
+
+  // ==== طرق مساعدة ====
+
+  // طريقة مساعدة للبحث الآمن في النصوص
+  safeStringIncludes(str, searchTerm) {
+    try {
+      return (
+        str && typeof str === "string" && str.toLowerCase().includes(searchTerm)
+      );
+    } catch (error) {
+      console.warn("Error in safeStringIncludes:", { str, searchTerm, error });
+      return false;
+    }
+  }
+
+  // طريقة للتحقق من صحة البيانات قبل الحفظ
+  validateData(data, requiredFields = []) {
+    if (!data || typeof data !== "object") {
+      return { valid: false, error: "Invalid data object" };
+    }
+
+    for (const field of requiredFields) {
+      if (
+        !data.hasOwnProperty(field) ||
+        data[field] === undefined ||
+        data[field] === null
+      ) {
+        return { valid: false, error: `Missing required field: ${field}` };
+      }
+    }
+
+    return { valid: true };
+  }
+
+  // طريقة تشخيص لفحص سلامة البيانات
+  async diagnoseDatabaseIntegrity() {
+    try {
+      await this.waitForInit();
+
+      const results = {
+        products: { total: 0, corrupted: 0, missing_fields: [] },
+        customers: { total: 0, corrupted: 0, missing_fields: [] },
+        categories: { total: 0, corrupted: 0, missing_fields: [] },
+      };
+
+      // فحص المنتجات
+      const products = await this.getProducts();
+      results.products.total = products.length;
+
+      products.forEach((product, index) => {
+        if (!product.name_ar || typeof product.name_ar !== "string") {
+          results.products.corrupted++;
+          results.products.missing_fields.push(
+            `Product ${index}: invalid name_ar`
+          );
+        }
+        if (
+          product.description_ar &&
+          typeof product.description_ar !== "string"
+        ) {
+          results.products.corrupted++;
+          results.products.missing_fields.push(
+            `Product ${index}: invalid description_ar`
+          );
+        }
+      });
+
+      // فحص العملاء
+      const customers = await this.getCustomers();
+      results.customers.total = customers.length;
+
+      customers.forEach((customer, index) => {
+        if (!customer.name || typeof customer.name !== "string") {
+          results.customers.corrupted++;
+          results.customers.missing_fields.push(
+            `Customer ${index}: invalid name`
+          );
+        }
+      });
+
+      // فحص الفئات
+      const categories = await this.getCategories();
+      results.categories.total = categories.length;
+
+      console.log("📊 Database Integrity Report:", results);
+      return results;
+    } catch (error) {
+      console.error("❌ Error during database diagnosis:", error);
+      return { error: error.message };
+    }
   }
 }
 

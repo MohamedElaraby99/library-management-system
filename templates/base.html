@@ -5,6 +5,16 @@
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#2a5298">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Norko Store">
+    <meta name="msapplication-TileColor" content="#1e3c72">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/logo.png') }}">
+
     <title>{% block title %}إدارة Norko Store{% endblock %}</title>
 
     <!-- Bootstrap 5 RTL CSS -->
@@ -515,10 +525,108 @@
         </div>
     </footer>
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Chart.js for charts -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Bootstrap JS (with offline fallback) -->
+    <script>
+        // تحميل Bootstrap JS مع fallback للعمل غير المتصل
+        (function () {
+            const bootstrapScript = document.createElement('script');
+            bootstrapScript.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js';
+            bootstrapScript.async = true;
+
+            // معالج النجاح
+            bootstrapScript.onload = function () {
+                console.log('✅ Bootstrap JS loaded successfully from CDN');
+                window.bootstrapAvailable = true;
+            };
+
+            // معالج الخطأ
+            bootstrapScript.onerror = function () {
+                console.log('⚠️ Bootstrap JS CDN failed, creating basic fallback');
+                window.bootstrapAvailable = false;
+
+                // إنشاء Bootstrap fallback أساسي
+                window.bootstrap = {
+                    Modal: function () {
+                        return {
+                            show: function () { console.log('Modal show - Bootstrap fallback'); },
+                            hide: function () { console.log('Modal hide - Bootstrap fallback'); },
+                            dispose: function () { console.log('Modal dispose - Bootstrap fallback'); }
+                        };
+                    },
+                    Dropdown: function () {
+                        return {
+                            show: function () { console.log('Dropdown show - Bootstrap fallback'); },
+                            hide: function () { console.log('Dropdown hide - Bootstrap fallback'); }
+                        };
+                    },
+                    Alert: function () {
+                        return {
+                            close: function () { console.log('Alert close - Bootstrap fallback'); }
+                        };
+                    }
+                };
+
+                // إضافة طرق ثابتة
+                window.bootstrap.Modal.getInstance = function () { return null; };
+                window.bootstrap.Dropdown.getInstance = function () { return null; };
+            };
+
+            // إضافة timeout للتحقق من التحميل
+            setTimeout(function () {
+                if (!window.bootstrap && !window.bootstrapAvailable) {
+                    console.log('⏰ Bootstrap JS timeout - initializing fallback');
+                    bootstrapScript.onerror();
+                }
+            }, 5000);
+
+            document.head.appendChild(bootstrapScript);
+        })();
+    </script>
+    <!-- Chart.js for charts (with offline fallback) -->
+    <script>
+        // تحميل Chart.js مع fallback للعمل غير المتصل
+        (function () {
+            const chartScript = document.createElement('script');
+            chartScript.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+            chartScript.async = true;
+
+            // معالج النجاح
+            chartScript.onload = function () {
+                console.log('✅ Chart.js loaded successfully from CDN');
+                window.chartJsAvailable = true;
+            };
+
+            // معالج الخطأ
+            chartScript.onerror = function () {
+                console.log('⚠️ Chart.js CDN failed, creating fallback');
+                window.chartJsAvailable = false;
+
+                // إنشاء Chart fallback بسيط
+                window.Chart = function () {
+                    console.log('📊 Chart.js not available - using fallback');
+                    return {
+                        destroy: function () { },
+                        update: function () { },
+                        render: function () { }
+                    };
+                };
+
+                // إضافة طرق أساسية
+                window.Chart.register = function () { };
+                window.Chart.defaults = { responsive: true };
+            };
+
+            // إضافة timeout للتحقق من التحميل
+            setTimeout(function () {
+                if (!window.Chart && !window.chartJsAvailable) {
+                    console.log('⏰ Chart.js timeout - initializing fallback');
+                    chartScript.onerror();
+                }
+            }, 5000);
+
+            document.head.appendChild(chartScript);
+        })();
+    </script>
 
     <!-- Mobile dropdown fix -->
     <script>
@@ -657,44 +765,76 @@
         // تسجيل Service Worker للعمل في وضع الأوفلاين
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then(function (registration) {
-                        console.log('✅ Service Worker registered successfully:', registration.scope);
+                // قائمة المسارات المختلفة لتجربتها
+                const serviceWorkerPaths = [
+                    '/service-worker.js',
+                    '/static/js/service-worker.js'
+                ];
 
-                        // تفعيل background sync
-                        if ('sync' in window.ServiceWorkerRegistration.prototype) {
-                            console.log('✅ Background Sync supported');
-                        }
+                async function registerServiceWorker() {
+                    for (const path of serviceWorkerPaths) {
+                        try {
+                            console.log(`🔄 Trying to register Service Worker from: ${path}`);
 
-                        // التحديث التلقائي
-                        registration.addEventListener('updatefound', () => {
-                            const newWorker = registration.installing;
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    console.log('🔄 Service Worker updated');
-                                    if (confirm('تم تحديث التطبيق. هل تريد إعادة تحميل الصفحة؟')) {
-                                        window.location.reload();
-                                    }
-                                }
+                            const registration = await navigator.serviceWorker.register(path, {
+                                scope: '/'
                             });
-                        });
-                    })
-                    .catch(function (error) {
-                        console.log('❌ Service Worker registration failed:', error);
-                    });
+
+                            console.log('✅ Service Worker registered successfully:', registration.scope);
+
+                            // تفعيل background sync
+                            if ('sync' in window.ServiceWorkerRegistration.prototype) {
+                                console.log('✅ Background Sync supported');
+                            }
+
+                            // التحديث التلقائي
+                            registration.addEventListener('updatefound', () => {
+                                const newWorker = registration.installing;
+                                newWorker.addEventListener('statechange', () => {
+                                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                        console.log('🔄 Service Worker updated');
+                                        if (confirm('تم تحديث التطبيق. هل تريد إعادة تحميل الصفحة؟')) {
+                                            window.location.reload();
+                                        }
+                                    }
+                                });
+                            });
+
+                            // نجح التسجيل، اخرج من الحلقة
+                            return registration;
+
+                        } catch (error) {
+                            console.log(`❌ Failed to register from ${path}:`, error.message);
+                            continue;
+                        }
+                    }
+
+                    // إذا فشل جميع المسارات
+                    console.log('❌ All Service Worker registration attempts failed');
+                    console.log('ℹ️ App will work without offline capabilities');
+                }
+
+                registerServiceWorker().catch(error => {
+                    console.log('❌ Service Worker registration completely failed:', error);
+                });
             });
         } else {
-            console.log('❌ Service Worker not supported');
+            console.log('❌ Service Worker not supported in this browser');
         }
 
         // تهيئة نظام الأوفلاين عند تحميل الصفحة
         document.addEventListener('DOMContentLoaded', async function () {
             try {
+                // تأخير قصير للسماح للصفحة بالتحميل
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
                 // تهيئة مدير قاعدة البيانات المحلية
                 if (typeof DBManager !== 'undefined') {
                     window.dbManager = new DBManager();
                     await window.dbManager.init();
                     console.log('✅ Database Manager initialized');
+                } else {
+                    console.log('⚠️ DBManager not available');
                 }
 
                 // تهيئة مدير المزامنة
@@ -702,6 +842,8 @@
                     window.syncManager = new SyncManager();
                     await window.syncManager.init();
                     console.log('✅ Sync Manager initialized');
+                } else {
+                    console.log('⚠️ SyncManager not available');
                 }
 
                 // تهيئة معالج الأوفلاين
@@ -709,6 +851,13 @@
                     window.offlineHandler = new OfflineHandler();
                     await window.offlineHandler.init();
                     console.log('✅ Offline Handler initialized');
+                } else {
+                    console.log('⚠️ OfflineHandler not available');
+                }
+
+                // تحديث فوري لحالة الشبكة بعد التهيئة
+                if (window.syncManager) {
+                    window.syncManager.updateOnlineStatus();
                 }
 
                 // تحميل البيانات المحلية
@@ -719,16 +868,18 @@
                             await window.syncManager.performSync();
                             console.log('🔄 Initial data sync completed');
                         } catch (error) {
-                            console.log('⚠️ Initial sync failed - will work offline with cached data');
+                            console.log('⚠️ Initial sync failed - will work offline with cached data:', error.message);
                         }
-                    }, 2000);
+                    }, 3000);
                 }
 
                 // مراقبة حالة الشبكة
                 window.addEventListener('online', function () {
                     console.log('🌐 Network connection restored');
                     if (window.syncManager) {
-                        window.syncManager.performSync();
+                        setTimeout(() => {
+                            window.syncManager.performSync();
+                        }, 1000);
                     }
                 });
 
@@ -749,6 +900,8 @@
                     const status = await window.syncManager.getStatus();
                     console.log('📊 Offline Status:', status);
                     return status;
+                } else {
+                    console.log('❌ SyncManager not available');
                 }
             },
 
@@ -757,6 +910,8 @@
                 if (window.syncManager) {
                     await window.syncManager.performSync();
                     console.log('🔄 Manual sync completed');
+                } else {
+                    console.log('❌ SyncManager not available');
                 }
             },
 
@@ -765,14 +920,96 @@
                 if (window.dbManager && confirm('هل أنت متأكد من حذف جميع البيانات المحلية؟')) {
                     await window.dbManager.clearAllData();
                     console.log('🗑️ All offline data cleared');
+                } else {
+                    console.log('❌ DBManager not available');
                 }
             },
 
             // إعادة تحميل البيانات
             reloadData: async function () {
                 if (window.syncManager) {
-                    await window.syncManager.syncFromServer();
+                    await window.syncManager.syncDataFromServer();
                     console.log('⬇️ Data reloaded from server');
+                } else {
+                    console.log('❌ SyncManager not available');
+                }
+            },
+
+            // فحص Service Worker
+            checkServiceWorker: async function () {
+                if ('serviceWorker' in navigator) {
+                    const registration = await navigator.serviceWorker.getRegistration();
+                    console.log('🔧 Service Worker Registration:', registration);
+                    return registration;
+                } else {
+                    console.log('❌ Service Worker not supported');
+                }
+            },
+
+            // تشخيص سلامة قاعدة البيانات
+            diagnoseDatabaseIntegrity: async function () {
+                if (window.dbManager) {
+                    const results = await window.dbManager.diagnoseDatabaseIntegrity();
+                    console.log('🔍 Database Integrity Diagnosis completed');
+                    return results;
+                } else {
+                    console.log('❌ DBManager not available');
+                }
+            },
+
+            // إصلاح البيانات التالفة
+            fixCorruptedData: async function () {
+                if (window.dbManager && window.syncManager) {
+                    console.log('🔧 Starting data repair...');
+
+                    // إعادة تحميل البيانات من الخادم
+                    await window.syncManager.syncDataFromServer();
+
+                    // فحص سلامة البيانات بعد الإصلاح
+                    const results = await window.dbManager.diagnoseDatabaseIntegrity();
+
+                    console.log('✅ Data repair completed');
+                    return results;
+                } else {
+                    console.log('❌ Required managers not available');
+                }
+            },
+
+            // فحص حالة المكتبات الخارجية
+            checkExternalLibraries: function () {
+                const status = {
+                    bootstrap: {
+                        available: !!window.bootstrap,
+                        fromCDN: !!window.bootstrapAvailable,
+                        fallback: !!window.bootstrap && !window.bootstrapAvailable
+                    },
+                    chartJs: {
+                        available: !!window.Chart,
+                        fromCDN: !!window.chartJsAvailable,
+                        fallback: !!window.Chart && !window.chartJsAvailable
+                    }
+                };
+
+                console.log('📚 External Libraries Status:', status);
+
+                // إظهار تحذيرات إذا كانت المكتبات تعمل على fallback
+                if (status.bootstrap.fallback) {
+                    console.warn('⚠️ Bootstrap is using fallback - some UI features may be limited');
+                }
+                if (status.chartJs.fallback) {
+                    console.warn('⚠️ Chart.js is using fallback - charts will not be displayed');
+                }
+
+                return status;
+            },
+
+            // إعادة تحميل المكتبات الخارجية
+            reloadExternalLibraries: async function () {
+                console.log('🔄 Attempting to reload external libraries...');
+
+                // إعادة تحميل الصفحة لإعادة تحميل جميع المكتبات
+                if (confirm('سيتم إعادة تحميل الصفحة لإعادة تحميل المكتبات الخارجية. هل تريد المتابعة؟')) {
+                    location.reload();
                 }
             }
         };

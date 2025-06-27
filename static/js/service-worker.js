@@ -7,10 +7,11 @@ const STATIC_FILES = [
   "/",
   "/static/css/style.css",
   "/static/images/logo.png",
-  // Bootstrap و الخطوط
+  // Bootstrap و الخطوط والمكتبات الخارجية
   "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css",
   "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css",
   "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js",
+  "https://cdn.jsdelivr.net/npm/chart.js",
   // الصفحات الأساسية
   "/dashboard",
   "/sales/new",
