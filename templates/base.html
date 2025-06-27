@@ -296,6 +296,13 @@
                         </ul>
                     </li>
 
+                    <!-- مولد QR -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('qr_generator') }}">
+                            <i class="bi bi-qr-code"></i> مولد QR
+                        </a>
+                    </li>
+
                     <!-- قائمة العملاء والديون - للأدمن فقط -->
                     {% if current_user.is_admin() %}
                     <li class="nav-item dropdown">
@@ -367,6 +374,9 @@
                                 </a></li>
                             <li><a class="dropdown-item" href="{{ url_for('shopping_list') }}">
                                     <i class="bi bi-cart-plus"></i> قائمة النواقص
+                                </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('qr_generator') }}">
+                                    <i class="bi bi-qr-code"></i> مولد رموز QR
                                 </a></li>
                             <li>
                                 <hr class="dropdown-divider">

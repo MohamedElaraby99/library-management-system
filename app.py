@@ -3263,6 +3263,12 @@ def api_debug_excel():
     except Exception as e:
         return jsonify({'error': f'خطأ في قراءة الملف: {str(e)}'}), 500
 
+@app.route('/qr-generator')
+@login_required
+def qr_generator():
+    """صفحة توليد QR codes للينكات ومواقع التواصل الاجتماعي"""
+    return render_template('qr_generator.html')
+
 @app.route('/debug-auth')
 def debug_auth():
     """صفحة تشخيص مشاكل المصادقة"""
