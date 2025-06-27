@@ -3269,6 +3269,34 @@ def qr_generator():
     """صفحة توليد QR codes للينكات ومواقع التواصل الاجتماعي"""
     return render_template('qr_generator.html')
 
+@app.route('/price-ticket')
+@login_required
+@seller_or_admin_required
+def price_ticket():
+    """صفحة إنتاج تيكت الأسعار"""
+    products = Product.query.order_by(Product.name_ar).all()
+    return render_template('price_ticket.html', products=products)
+
+@app.route('/api/search-products')
+@login_required
+@seller_or_admin_required
+def api_search_products():
+    """البحث عن المنتجات لتيكت الأسعار"""
+    query = request.args.get('q', '').strip()
+    products = []
+    
+    if query:
+        products = Product.query.filter(
+            Product.name_ar.contains(query)
+        ).order_by(Product.name_ar).limit(10).all()
+    
+    return jsonify([{
+        'id': product.id,
+        'name': product.name_ar,
+        'retail_price': product.retail_price,
+        'wholesale_price': product.wholesale_price
+    } for product in products])
+
 @app.route('/debug-auth')
 def debug_auth():
     """صفحة تشخيص مشاكل المصادقة"""
