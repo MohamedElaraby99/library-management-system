@@ -3446,6 +3446,221 @@ def debug_auth():
     </html>
     """
 
+@app.route('/api/sync', methods=['POST'])
+@login_required
+@seller_or_admin_required
+def api_sync():
+    """نقطة نهاية مخصصة لمزامنة البيانات غير المتصلة"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'البيانات مطلوبة'}), 400
+
+        sync_type = data.get('type')
+        sync_data = data.get('data', [])
+        
+        results = {
+            'success': [],
+            'errors': [],
+            'total': len(sync_data)
+        }
+
+        if sync_type == 'sales':
+            # مزامنة المبيعات المحفوظة محلياً
+            for sale_data in sync_data:
+                try:
+                    # التحقق من البيانات المطلوبة
+                    if not sale_data.get('items') or len(sale_data['items']) == 0:
+                        results['errors'].append({
+                            'data': sale_data,
+                            'error': 'لا توجد عناصر في البيع'
+                        })
+                        continue
+
+                    # إنشاء المبيعة
+                    sale = Sale(
+                        subtotal=sale_data.get('subtotal', 0),
+                        total_amount=sale_data.get('total_amount', 0),
+                        discount_type=sale_data.get('discount_type', 'none'),
+                        discount_value=sale_data.get('discount_value', 0),
+                        discount_amount=sale_data.get('discount_amount', 0),
+                        user_id=current_user.id,
+                        customer_id=sale_data.get('customer_id'),
+                        payment_status=sale_data.get('payment_status', 'paid'),
+                        payment_type=sale_data.get('payment_type', 'cash'),
+                        notes=sale_data.get('notes', ''),
+                        sale_date=datetime.utcnow()
+                    )
+
+                    db.session.add(sale)
+                    db.session.flush()  # للحصول على sale.id
+
+                    # إضافة عناصر البيع
+                    for item_data in sale_data['items']:
+                        product = Product.query.get(item_data['product_id'])
+                        if not product:
+                            raise ValueError(f"المنتج رقم {item_data['product_id']} غير موجود")
+
+                        # التحقق من الكمية المتوفرة
+                        if product.stock_quantity < item_data['quantity']:
+                            raise ValueError(f"الكمية المطلوبة من {product.name_ar} غير متوفرة")
+
+                        sale_item = SaleItem(
+                            sale_id=sale.id,
+                            product_id=item_data['product_id'],
+                            quantity=item_data['quantity'],
+                            unit_price=item_data['unit_price'],
+                            total_price=item_data['total_price']
+                        )
+
+                        db.session.add(sale_item)
+
+                        # تحديث المخزون
+                        product.stock_quantity -= item_data['quantity']
+
+                    db.session.commit()
+                    
+                    results['success'].append({
+                        'local_id': sale_data.get('local_id'),
+                        'server_id': sale.id,
+                        'sale_date': sale.sale_date.isoformat()
+                    })
+
+                except Exception as e:
+                    db.session.rollback()
+                    results['errors'].append({
+                        'data': sale_data,
+                        'error': str(e)
+                    })
+
+        elif sync_type == 'customers':
+            # مزامنة العملاء الجدد
+            for customer_data in sync_data:
+                try:
+                    # التحقق من عدم وجود العميل مسبقاً
+                    existing_customer = Customer.query.filter(
+                        (Customer.name == customer_data['name']) |
+                        (Customer.phone == customer_data.get('phone'))
+                    ).first()
+
+                    if existing_customer:
+                        results['errors'].append({
+                            'data': customer_data,
+                            'error': 'العميل موجود مسبقاً'
+                        })
+                        continue
+
+                    customer = Customer(
+                        name=customer_data['name'],
+                        phone=customer_data.get('phone'),
+                        address=customer_data.get('address'),
+                        notes=customer_data.get('notes')
+                    )
+
+                    db.session.add(customer)
+                    db.session.commit()
+
+                    results['success'].append({
+                        'local_id': customer_data.get('local_id'),
+                        'server_id': customer.id
+                    })
+
+                except Exception as e:
+                    db.session.rollback()
+                    results['errors'].append({
+                        'data': customer_data,
+                        'error': str(e)
+                    })
+
+        else:
+            return jsonify({'error': 'نوع المزامنة غير مدعوم'}), 400
+
+        return jsonify({
+            'message': 'تمت المزامنة',
+            'results': results,
+            'success_count': len(results['success']),
+            'error_count': len(results['errors'])
+        })
+
+    except Exception as e:
+        app.logger.error(f"Sync error: {str(e)}")
+        return jsonify({'error': 'حدث خطأ أثناء المزامنة'}), 500
+
+
+@app.route('/api/offline-status')
+@login_required
+def api_offline_status():
+    """إرجاع معلومات حالة التطبيق للوضع غير المتصل"""
+    try:
+        # إحصائيات المنتجات
+        total_products = Product.query.count()
+        low_stock_products = Product.query.filter(
+            Product.stock_quantity <= Product.min_stock_threshold
+        ).count()
+        
+        # إحصائيات العملاء
+        total_customers = Customer.query.count()
+        
+        # إحصائيات المبيعات اليومية
+        today = datetime.utcnow().date()
+        today_sales = Sale.query.filter(
+            func.date(Sale.sale_date) == today
+        ).count()
+        
+        today_revenue = db.session.query(func.sum(Sale.total_amount)).filter(
+            func.date(Sale.sale_date) == today
+        ).scalar() or 0
+
+        return jsonify({
+            'status': 'online',
+            'timestamp': datetime.utcnow().isoformat(),
+            'stats': {
+                'products': {
+                    'total': total_products,
+                    'low_stock': low_stock_products
+                },
+                'customers': {
+                    'total': total_customers
+                },
+                'sales_today': {
+                    'count': today_sales,
+                    'revenue': float(today_revenue)
+                }
+            },
+            'user': {
+                'id': current_user.id,
+                'username': current_user.username,
+                'role': current_user.role
+            }
+        })
+
+    except Exception as e:
+        app.logger.error(f"Offline status error: {str(e)}")
+        return jsonify({'error': 'حدث خطأ في الحصول على الحالة'}), 500
+
+
+@app.route('/offline.html')
+def offline_page():
+    """صفحة الوضع غير المتصل"""
+    return render_template('offline.html')
+
+
+@app.route('/offline-demo')
+@login_required
+def offline_demo():
+    """صفحة اختبار الوظائف غير المتصلة"""
+    return render_template('offline-demo.html')
+
+
+# إضافة route لدعم Service Worker
+@app.route('/static/js/service-worker.js')
+def service_worker():
+    """تقديم Service Worker مع headers صحيحة"""
+    response = make_response(send_from_directory('static/js', 'service-worker.js'))
+    response.headers['Content-Type'] = 'application/javascript'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
