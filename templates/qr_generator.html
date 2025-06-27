@@ -354,6 +354,82 @@
             </div>
         </div>
     </div>
+
+    <!-- Long Text Section -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header text-white text-center"
+                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <h5 class="mb-0">
+                        <i class="fas fa-align-left me-2"></i>
+                        نص طويل متعدد السطور
+                    </h5>
+                    <p class="mb-0 mt-1 small">مناسب للنصوص المطولة والمقالات والرسائل والمعلومات التفصيلية</p>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="longText" class="form-label fw-bold">
+                                    <i class="fas fa-file-text text-primary"></i> اكتب النص الطويل هنا:
+                                </label>
+                                <textarea class="form-control qr-input" id="longText" rows="8"
+                                    placeholder="يمكنك كتابة نص طويل هنا بعدة أسطر...&#10;&#10;مثال:&#10;• تفاصيل حدث أو مناسبة&#10;• عنوان مفصل مع التوجيهات&#10;• رسالة طويلة أو تهنئة&#10;• معلومات كاملة عن منتج&#10;• تعليمات أو إرشادات&#10;• أو أي محتوى تريد مشاركته بسهولة"
+                                    onkeyup="generateLongTextQR()" onpaste="setTimeout(generateLongTextQR, 100)"
+                                    style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; resize: vertical; min-height: 200px;"></textarea>
+                                <small class="form-text text-muted">
+                                    <i class="fas fa-info-circle text-info"></i>
+                                    يدعم النص العربي والإنجليزي والأرقام والرموز الخاصة والأسطر المتعددة
+                                </small>
+                            </div>
+                            <div class="mb-3">
+                                <div class="d-flex flex-wrap gap-2 align-items-center">
+                                    <button type="button" class="btn btn-outline-info btn-sm"
+                                        onclick="addSampleLongText()">
+                                        <i class="fas fa-magic"></i> نص تجريبي
+                                    </button>
+                                    <button type="button" class="btn btn-outline-warning btn-sm"
+                                        onclick="clearLongText()">
+                                        <i class="fas fa-eraser"></i> مسح النص
+                                    </button>
+                                    <button type="button" class="btn btn-outline-success btn-sm"
+                                        onclick="copyToClipboard('longText')">
+                                        <i class="fas fa-copy"></i> نسخ النص
+                                    </button>
+                                    <button type="button" class="btn btn-outline-dark btn-sm"
+                                        onclick="pasteFromClipboard('longText')">
+                                        <i class="fas fa-paste"></i> لصق
+                                    </button>
+                                    <span class="badge bg-secondary ms-2" id="charCount">0 حرف</span>
+                                    <span class="badge bg-info" id="lineCount">0 سطر</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center">
+                                <div class="qr-title mb-2" id="longtext-title" style="display: none;">
+                                    <strong>النص الطويل</strong>
+                                </div>
+                                <div class="qr-code border rounded p-3" id="longtext-qr"
+                                    style="min-height: 250px; background: #f8f9fa;">
+                                    <div
+                                        class="text-muted d-flex flex-column align-items-center justify-content-center h-100">
+                                        <i class="fas fa-qrcode fa-3x mb-3 text-secondary"></i>
+                                        <p class="small text-center">سيظهر رمز QR هنا<br>عند كتابة النص</p>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary mt-3" onclick="downloadQR('longtext', 'LongText')"
+                                    id="downloadLongTextBtn" style="display: none;">
+                                    <i class="fas fa-download"></i> تحميل QR للنص الطويل
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Print Styles -->
@@ -418,6 +494,19 @@
             display: block !important;
             font-weight: bold !important;
             margin-bottom: 10px !important;
+        }
+
+        /* Long text section styling for print */
+        .card:has(#longtext-qr) {
+            page-break-inside: avoid;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        #longtext-qr canvas,
+        #longtext-qr img {
+            max-width: 300px !important;
+            height: auto !important;
         }
     }
 
@@ -949,6 +1038,152 @@
         }
     }
 
+    // Generate QR for long text
+    async function generateLongTextQR() {
+        const input = document.getElementById('longText');
+        const qrContainer = document.getElementById('longtext-qr');
+        const titleElement = document.getElementById('longtext-title');
+        const downloadBtn = document.getElementById('downloadLongTextBtn');
+
+        // Update character and line counters
+        updateTextCounters();
+
+        if (!input.value.trim()) {
+            qrContainer.innerHTML = `
+                <div class="text-muted d-flex flex-column align-items-center justify-content-center h-100">
+                    <i class="fas fa-qrcode fa-3x mb-3 text-secondary"></i>
+                    <p class="small text-center">سيظهر رمز QR هنا<br>عند كتابة النص</p>
+                </div>
+            `;
+            titleElement.style.display = 'none';
+            downloadBtn.style.display = 'none';
+            return;
+        }
+
+        try {
+            qrContainer.innerHTML = '<div class="text-center d-flex flex-column align-items-center justify-content-center h-100"><i class="fas fa-spinner fa-spin fa-2x mb-2"></i><p>جاري إنشاء QR للنص الطويل...</p></div>';
+            await waitForQRCode();
+
+            QRCode.toCanvas(qrContainer, input.value.trim(), {
+                width: currentQRSize,
+                height: currentQRSize,
+                margin: 2,
+                errorCorrectionLevel: 'M', // Medium error correction for long text
+                color: {
+                    dark: '#4a5568',
+                    light: '#FFFFFF'
+                }
+            }, function (error) {
+                if (error) {
+                    console.error('Long text QR error:', error);
+                    qrContainer.innerHTML = '<div class="alert alert-warning p-2"><small>خطأ في إنشاء QR للنص الطويل<br>جرب تقليل طول النص</small></div>';
+                } else {
+                    titleElement.style.display = document.getElementById('showTitles').checked ? 'block' : 'none';
+                    downloadBtn.style.display = 'inline-block';
+                }
+            });
+        } catch (error) {
+            console.error('Long text QR failed:', error);
+            qrContainer.innerHTML = '<div class="alert alert-danger p-2"><small>فشل في إنشاء QR للنص الطويل</small></div>';
+        }
+    }
+
+    // Update character and line counters
+    function updateTextCounters() {
+        const input = document.getElementById('longText');
+        const charCount = document.getElementById('charCount');
+        const lineCount = document.getElementById('lineCount');
+
+        if (input && charCount && lineCount) {
+            const text = input.value;
+            const chars = text.length;
+            const lines = text.split('\n').length;
+
+            charCount.textContent = `${chars} حرف`;
+            lineCount.textContent = `${lines} سطر`;
+
+            // Change badge color based on text length
+            charCount.className = chars > 1000 ? 'badge bg-warning ms-2' : 'badge bg-secondary ms-2';
+        }
+    }
+
+    // Add sample long text
+    function addSampleLongText() {
+        const longTextArea = document.getElementById('longText');
+        const sampleText = `مرحباً بكم في مكتبتنا الرقمية
+
+هذا مثال على نص طويل متعدد السطور يمكن تحويله إلى رمز QR للمشاركة السريعة.
+
+معلومات المكتبة:
+• الاسم: مكتبة المعرفة الرقمية
+• العنوان: شارع التعليم، حي الثقافة، المدينة
+• الهاتف: +966-11-1234567
+• البريد الإلكتروني: info@library.com
+
+أوقات العمل:
+- السبت إلى الأربعاء: 8:00 ص - 10:00 م
+- الخميس: 8:00 ص - 6:00 م
+- الجمعة: مغلق
+
+الخدمات المتاحة:
+✓ استعارة الكتب والمراجع
+✓ قاعات الدراسة والبحث
+✓ الوصول للمكتبة الرقمية
+✓ خدمات الطباعة والتصوير
+✓ ورش العمل والدورات التدريبية
+
+نتطلع لخدمتكم!`;
+
+        longTextArea.value = sampleText;
+        generateLongTextQR();
+    }
+
+    // Clear long text
+    function clearLongText() {
+        if (confirm('هل أنت متأكد من مسح النص الطويل؟')) {
+            const longTextArea = document.getElementById('longText');
+            longTextArea.value = '';
+            generateLongTextQR();
+        }
+    }
+
+    // Copy text to clipboard
+    async function copyToClipboard(elementId) {
+        const element = document.getElementById(elementId);
+        if (element && element.value) {
+            try {
+                await navigator.clipboard.writeText(element.value);
+                showAlert('success', '<i class="fas fa-check"></i> تم نسخ النص إلى الحافظة', 'copy-alert', 2000);
+            } catch (error) {
+                console.error('Failed to copy text:', error);
+                // Fallback for older browsers
+                element.select();
+                document.execCommand('copy');
+                showAlert('info', '<i class="fas fa-check"></i> تم نسخ النص', 'copy-alert', 2000);
+            }
+        } else {
+            showAlert('warning', '<i class="fas fa-exclamation"></i> لا يوجد نص لنسخه', 'copy-alert', 2000);
+        }
+    }
+
+    // Paste from clipboard
+    async function pasteFromClipboard(elementId) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            try {
+                const text = await navigator.clipboard.readText();
+                element.value = text;
+                if (elementId === 'longText') {
+                    generateLongTextQR();
+                }
+                showAlert('success', '<i class="fas fa-check"></i> تم لصق النص من الحافظة', 'paste-alert', 2000);
+            } catch (error) {
+                console.error('Failed to paste text:', error);
+                showAlert('warning', '<i class="fas fa-exclamation"></i> فشل في لصق النص', 'paste-alert', 2000);
+            }
+        }
+    }
+
     // Change QR size
     function changeQRSize(size) {
         currentQRSize = size;
@@ -986,6 +1221,8 @@
             await generateEmailQR();
             await new Promise(resolve => setTimeout(resolve, 200));
             await generateCustomQR();
+            await new Promise(resolve => setTimeout(resolve, 200));
+            await generateLongTextQR();
 
         } catch (error) {
             console.error('Error regenerating QR codes:', error);
@@ -1065,6 +1302,16 @@
             titles.forEach(title => {
                 title.style.display = 'none';
             });
+
+            // Clear character counters
+            const charCount = document.getElementById('charCount');
+            const lineCount = document.getElementById('lineCount');
+            if (charCount) charCount.textContent = '0 حرف';
+            if (lineCount) lineCount.textContent = '0 سطر';
+
+            // Hide download button for long text
+            const downloadBtn = document.getElementById('downloadLongTextBtn');
+            if (downloadBtn) downloadBtn.style.display = 'none';
         }
     }
 
@@ -1120,6 +1367,9 @@
         document.getElementById('telegram').value = 'https://t.me/your_channel';
         document.getElementById('tiktok').value = 'https://tiktok.com/@your_account';
         document.getElementById('customText').value = 'مرحباً! هذا نص تجريبي لـ QR مخصص';
+
+        // Add sample long text
+        addSampleLongText();
 
         // Wait a bit for form to update, then regenerate
         setTimeout(async () => {
