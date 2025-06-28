@@ -7,17 +7,48 @@ const STATIC_FILES = [
   "/",
   "/static/css/style.css",
   "/static/images/logo.png",
+  "/static/js/db-manager.js",
+  "/static/js/sync-manager.js",
+  "/static/js/offline-handler.js",
+  "/static/manifest.json",
   // Bootstrap و الخطوط والمكتبات الخارجية
   "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css",
   "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css",
   "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js",
   "https://cdn.jsdelivr.net/npm/chart.js",
-  // الصفحات الأساسية
+  // الصفحات الرئيسية
   "/dashboard",
-  "/sales/new",
-  "/products",
-  "/customers",
   "/offline.html",
+  "/offline-demo",
+  // صفحات المبيعات
+  "/sales",
+  "/sales/new",
+  // صفحات المنتجات
+  "/products",
+  "/products/add",
+  // صفحات العملاء
+  "/customers",
+  "/customers/add",
+  // صفحات الفئات
+  "/categories",
+  "/categories/add",
+  // صفحات المستخدمين
+  "/users",
+  "/users/add",
+  // صفحات المصروفات
+  "/expenses",
+  "/expenses/add",
+  // صفحات قائمة التسوق
+  "/shopping-list",
+  "/shopping-list/add",
+  // صفحات المرتجعات
+  "/returns",
+  // صفحات أخرى
+  "/reports",
+  "/debts",
+  "/stock/update",
+  "/qr-generator",
+  "/price-ticket",
 ];
 
 // API endpoints للتخزين المؤقت
@@ -26,6 +57,10 @@ const API_URLS = [
   "/api/categories",
   "/api/customers",
   "/api/stock-status",
+  "/api/offline-status",
+  "/api/export/products",
+  "/api/export/sales",
+  "/api/search-products",
 ];
 
 // تثبيت Service Worker
