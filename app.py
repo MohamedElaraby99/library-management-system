@@ -72,7 +72,7 @@ if not app.debug and app.config.get('FLASK_CONFIG') != 'development':
 # Login manager
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login'
+login_manager.login_view = 'index'
 login_manager.login_message = 'يرجى تسجيل الدخول للوصول إلى هذه الصفحة'
 login_manager.session_protection = 'strong'
 
@@ -3871,7 +3871,7 @@ if not app.debug and app.config.get('FLASK_CONFIG') != 'development':
 # Login manager
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login'
+login_manager.login_view = 'index'
 login_manager.login_message = 'يرجى تسجيل الدخول للوصول إلى هذه الصفحة'
 login_manager.session_protection = 'strong'
 
