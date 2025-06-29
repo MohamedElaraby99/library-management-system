@@ -210,18 +210,13 @@ def inject_debt_stats():
             return dict(global_total_debt=0, global_customers_with_debt=0)
     return dict(global_total_debt=0, global_customers_with_debt=0)
 
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")
 def index():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-    return redirect(url_for('login'))
-
-@app.route('/login', methods=['GET', 'POST'])
-@limiter.limit("10 per minute")
-def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
     
+    # عرض صفحة تسجيل الدخول مباشرة في الصفحة الرئيسية
     form = LoginForm()
     if form.validate_on_submit():
         try:
@@ -350,7 +345,7 @@ def logout():
     logout_user()
     session.clear()  # Clear all session data
     flash('تم تسجيل الخروج بنجاح', 'success')
-    return redirect(url_for('login'))
+    return redirect(url_for('index'))
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
 @limiter.limit("5 per minute")
@@ -4014,18 +4009,13 @@ def inject_debt_stats():
             return dict(global_total_debt=0, global_customers_with_debt=0)
     return dict(global_total_debt=0, global_customers_with_debt=0)
 
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")
 def index():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-    return redirect(url_for('login'))
-
-@app.route('/login', methods=['GET', 'POST'])
-@limiter.limit("10 per minute")
-def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
     
+    # عرض صفحة تسجيل الدخول مباشرة في الصفحة الرئيسية
     form = LoginForm()
     if form.validate_on_submit():
         try:
@@ -4154,7 +4144,7 @@ def logout():
     logout_user()
     session.clear()  # Clear all session data
     flash('تم تسجيل الخروج بنجاح', 'success')
-    return redirect(url_for('login'))
+    return redirect(url_for('index'))
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
 @limiter.limit("5 per minute")
